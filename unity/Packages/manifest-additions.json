@@ -1,0 +1,10 @@
+{
+  "_comment": "Add these to the generated Packages/manifest.json 'dependencies'. Versions are indicative; in Package Manager, add by name and let Unity resolve the latest version compatible with Unity 6000.0 LTS. The XREAL SDK 3.1.0 is added separately via 'Add package from tarball' (com.xreal.xr.tar.gz).",
+  "dependencies": {
+    "com.unity.cloud.gltfast": "6.9.0",
+    "com.unity.xr.arfoundation": "6.0.5",
+    "com.unity.xr.interaction.toolkit": "3.0.7",
+    "com.unity.xr.management": "4.5.0",
+    "com.unity.xr.hands": "1.5.0"
+  }
+}

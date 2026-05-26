@@ -1,0 +1,56 @@
+.archive/
+.env
+.env.*
+.DS_Store
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.venv*/
+dist/
+build/
+*.log
+.idea/
+.vscode/
+
+# Unity (project lives under unity/)
+unity/[Ll]ibrary/
+unity/[Tt]emp/
+unity/[Oo]bj/
+unity/[Bb]uild/
+unity/[Bb]uilds/
+unity/[Ll]ogs/
+unity/[Uu]serSettings/
+unity/[Mm]emoryCaptures/
+unity/[Rr]ecordings/
+unity/.vsconfig
+unity/[Aa]ssets/XR/Temp/
+unity/[Aa]ssets/XR/UserSimulationSettings/
+unity/.utmp/
+unity/[Aa]ssets/Resources/PerformanceTestRun*
+*.apk
+*.aab
+*.csproj
+*.unityproj
+*.sln
+*.slnx
+*.booproj
+*.svd
+*.pidb
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+crashlytics-build.properties
+
+# Blender
+*.blend1
+*.blend2
+
+# Vendored SDK tarball (248MB; re-download from developer.xreal.com)
+unity/vendor/
+
+# Large Blender scene assets (exported glb go to the device, not the repo)
+assets/scenes/*.glb
+assets/scenes/*.gltf

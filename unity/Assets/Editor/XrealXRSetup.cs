@@ -91,17 +91,13 @@ namespace XrealAR.EditorTools
             origin.Camera = cam;
             origin.CameraFloorOffsetObject = offsetGO;
 
-            // Placeholder content so there's something visible to confirm world-locked 6DoF on-device.
-            // Replace with the Dejarik board/pieces as the app takes shape.
-            var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            cube.name = "Placeholder Cube";
-            cube.transform.position = new Vector3(0f, 1.0f, 1.5f);
-            cube.transform.localScale = Vector3.one * 0.2f;
-
-            // Persistent spatial anchoring (PIN-to-room) is wired and ready; the glb loader + catalog +
-            // placement store are also kept. Build the Dejarik game logic on top of these.
+            // Persistent spatial anchoring (PIN-to-room) for the board.
             var anchorCtrl = new GameObject("Anchor Controller");
             anchorCtrl.AddComponent<AnchorPlacementController>();
+
+            // The game: builds the board, loads creature glbs from StreamingAssets, runs the match.
+            var game = new GameObject("Dejarik Game");
+            game.AddComponent<Dejarik.View.DejarikGame>();
 
             // Unity XR Hands official self-driving hand prefabs (XRHandTrackingEvents + XRHandSkeletonDriver
             // + rigged mesh). Parent under the Camera Offset so joints map to world like the head camera.

@@ -17,13 +17,13 @@ namespace Dejarik.View
         {
             _board = board;
             _cam = Camera.main;
-            _status = MakeText("status", 0.16f, Color.white, TextAlignmentOptions.Center);
-            _dice = MakeText("dice", 0.22f, Color.white, TextAlignmentOptions.Center);
-            _stats = MakeText("stats", 0.14f, Color.white, TextAlignmentOptions.Center);
-            _yStatus = 0.42f; _yDice = 0.30f; _yStats = 0.18f; // heights above the board
+            _status = MakeText("status", 0.16f, Color.white, TextAlignmentOptions.Center, FontStyles.Normal);
+            _dice = MakeText("dice", 0.22f, Color.white, TextAlignmentOptions.Center, FontStyles.Bold);
+            _stats = MakeText("stats", 0.18f, Color.white, TextAlignmentOptions.Center, FontStyles.Bold);
+            _yStatus = 0.46f; _yDice = 0.34f; _yStats = 0.27f; // heights above the board
         }
 
-        TMP_Text MakeText(string name, float size, Color color, TextAlignmentOptions align)
+        TMP_Text MakeText(string name, float size, Color color, TextAlignmentOptions align, FontStyles style)
         {
             var go = new GameObject(name);
             go.transform.SetParent(transform, false);
@@ -31,6 +31,7 @@ namespace Dejarik.View
             tmp.fontSize = size;
             tmp.color = color;
             tmp.alignment = align;
+            tmp.fontStyle = style;
             tmp.rectTransform.sizeDelta = new Vector2(1.6f, 0.2f);
             tmp.text = "";
             return tmp;

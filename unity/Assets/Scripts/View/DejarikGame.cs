@@ -69,6 +69,7 @@ namespace Dejarik.View
             _world = gameObject.AddComponent<WorldHud>();
             _world.Build(_board.Root);
             _btnActions = new Action[] { Recenter, PinBoard, () => { _ = NewGame(); } };
+            _audio.StartAmbient(_board.Root); // hologram-projector hum from the board
             Recenter();
 
             await NewGame();
@@ -176,7 +177,8 @@ namespace Dejarik.View
             if (moves.Contains(sp)) { Debug.Log($"[Dejarik] move {_selectedId} -> {sp}"); _state = Engine.ApplyMove(_state, _selectedId, sp); Deselect(); return true; }
             if (atkSpaceToId.TryGetValue(sp, out var defId)) { Debug.Log($"[Dejarik] attack {_selectedId} -> {defId}"); _state = Engine.ApplyAttack(_state, _selectedId, defId, _rng); Deselect(); return true; }
             if (piece != null && piece.Owner == Human) { Select(piece.Id); return false; }
-            Deselect();
+            // Pinched a non-target cell (not a legal move/attack): keep the current selection so a mis-aim
+            // isn't destructive — only its stats update. Pick another of your pieces to switch.
             return false;
         }
 

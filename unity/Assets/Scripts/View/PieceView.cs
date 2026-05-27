@@ -42,6 +42,25 @@ namespace Dejarik.View
             _desiredYaw = YawToCenter(p.Space);
             transform.localRotation = Quaternion.Euler(0f, _desiredYaw, 0f);
             PlayLoop(_c.Idle, 0.35f);
+            StartCoroutine(Ground());
+        }
+
+        // Some rigs' lowest point in the idle pose isn't the feet, so the bind-pose normalization leaves
+        // them floating. Once idle settles, drop the creature so its lowest point sits on the cell plane.
+        IEnumerator Ground()
+        {
+            yield return new WaitForSeconds(0.4f);
+            if (_c == null) yield break;
+            var rs = _c.Holder.GetComponentsInChildren<Renderer>();
+            if (rs.Length == 0) yield break;
+            var b = rs[0].bounds;
+            for (int i = 1; i < rs.Length; i++) b.Encapsulate(rs[i].bounds);
+            float worldDy = transform.position.y - b.min.y; // target = the PieceView origin (cell plane)
+            float scaleY = _inner.lossyScale.y;
+            if (Mathf.Abs(scaleY) < 1e-5f) yield break;
+            var lp = _c.Holder.transform.localPosition;
+            lp.y += worldDy / scaleY;
+            _c.Holder.transform.localPosition = lp;
         }
 
         public void SnapTo(int space)

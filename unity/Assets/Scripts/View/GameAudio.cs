@@ -35,6 +35,39 @@ namespace Dejarik.View
         public void Click(Vector3 pos) => PlayAt(Tone(0.05f, 1300f, 0.02f), pos, 0.45f);
         public void Move(Vector3 pos) => PlayAt(Tone(0.12f, 520f, 0.22f), pos, 0.35f);
 
+        // Looping hologram-projector hum + faint static, anchored to the board so it comes from there.
+        public void StartAmbient(Transform parent)
+        {
+            var go = new GameObject("ambientHum");
+            go.transform.SetParent(parent, false);
+            var s = go.AddComponent<AudioSource>();
+            s.clip = Hum();
+            s.loop = true;
+            s.volume = 0.13f;
+            s.spatialBlend = 1f;
+            s.minDistance = 0.5f;
+            s.maxDistance = 9f;
+            s.rolloffMode = AudioRolloffMode.Linear;
+            s.Play();
+        }
+
+        static AudioClip Hum()
+        {
+            int sr = 44100; float dur = 2f; int n = (int)(sr * dur);
+            var d = new float[n]; float st = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)sr;
+                float hum = 0.5f * Mathf.Sin(2f * Mathf.PI * 80f * t) + 0.18f * Mathf.Sin(2f * Mathf.PI * 160f * t);
+                st = Mathf.Lerp(st, Random.value * 2f - 1f, 0.35f); // filtered static
+                float fade = Mathf.Min(1f, t / 0.05f) * Mathf.Min(1f, (dur - t) / 0.05f); // seamless loop edges
+                d[i] = (hum + 0.22f * st) * 0.5f * fade;
+            }
+            var c = AudioClip.Create("hum", n, 1, sr, false);
+            c.SetData(d, 0);
+            return c;
+        }
+
         // Spawn a temporary 3D audio source at the world position so the sound comes from there.
         void PlayAt(AudioClip clip, Vector3 pos, float vol)
         {

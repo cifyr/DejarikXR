@@ -347,15 +347,28 @@ namespace Dejarik.View
         {
             if (!_setupDone) return;
             float w = Screen.width, h = Screen.height;
-            var style = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(h * 0.03f), alignment = TextAnchor.MiddleCenter };
-            GUI.Label(new Rect(0, 12, w, h * 0.06f), _hud, style);
+            float margin = w * 0.04f;
 
-            var bstyle = new GUIStyle(GUI.skin.button) { fontSize = Mathf.RoundToInt(h * 0.028f) };
-            float bw = w * 0.26f, bh = h * 0.09f, y = h - bh - 20f;
-            if (GUI.Button(new Rect(20, y, bw, bh), "RECENTER", bstyle)) Recenter();
-            if (GUI.Button(new Rect(30 + bw, y, bw, bh), "PIN BOARD", bstyle) && _anchors != null)
+            // Status banner, kept inside the top safe area.
+            var style = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = Mathf.RoundToInt(h * 0.026f),
+                alignment = TextAnchor.MiddleCenter,
+                wordWrap = true,
+            };
+            style.normal.textColor = Color.white;
+            GUI.Label(new Rect(margin, h * 0.05f, w - 2 * margin, h * 0.08f), _hud, style);
+
+            // Three buttons in a row that always fits the width, lifted off the bottom safe area.
+            var bstyle = new GUIStyle(GUI.skin.button) { fontSize = Mathf.RoundToInt(h * 0.022f), wordWrap = true };
+            float gap = w * 0.025f;
+            float bw = (w - 2 * margin - 2 * gap) / 3f;
+            float bh = h * 0.10f;
+            float y = h - bh - h * 0.06f;
+            if (GUI.Button(new Rect(margin, y, bw, bh), "RECENTER", bstyle)) Recenter();
+            if (GUI.Button(new Rect(margin + bw + gap, y, bw, bh), "PIN", bstyle) && _anchors != null)
                 _ = _anchors.PinAsync(_board.Root, "dejarik-board");
-            if (GUI.Button(new Rect(40 + 2 * bw, y, bw, bh), "NEW GAME", bstyle)) _ = NewGame();
+            if (GUI.Button(new Rect(margin + 2 * (bw + gap), y, bw, bh), "NEW GAME", bstyle)) _ = NewGame();
         }
     }
 }

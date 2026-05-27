@@ -60,8 +60,10 @@ namespace Dejarik.View
             bool parsed = await gltf.LoadGltfBinary(data, new Uri("file://creature/" + Pieces.IdOf(type)));
             if (!parsed) throw new InvalidOperationException($"glTFast failed to parse {rel}");
 
+            // Build + normalize at world scale 1 (NOT yet under the scaled board root), so "unit height"
+            // means one board-local unit. Parenting first would normalize against the board's tiny scale
+            // and make creatures ~1 m tall (enormous). Reparent only after normalization.
             var holder = new GameObject($"creature_{Pieces.IdOf(type)}");
-            holder.transform.SetParent(parent, false);
             var instantiator = new GameObjectInstantiator(gltf, holder.transform);
             bool ok = await gltf.InstantiateMainSceneAsync(instantiator);
             if (!ok) { UnityEngine.Object.Destroy(holder); throw new InvalidOperationException($"glTFast failed to instantiate {rel}"); }
@@ -111,6 +113,8 @@ namespace Dejarik.View
                 inst.RootBaseLocalRot = inst.RootBone.localRotation;
             }
 
+            // Now (after normalization) place it under the scaled board root.
+            holder.transform.SetParent(parent, false);
             return inst;
         }
 

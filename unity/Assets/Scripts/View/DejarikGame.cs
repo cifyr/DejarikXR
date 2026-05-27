@@ -203,23 +203,29 @@ namespace Dejarik.View
             _board.SetHighlights(moves, atkSpaces, null, selSpace);
         }
 
-        // Hand-only selection: the pointer is your index fingertip; you select the cell/piece nearest your
-        // fingertip by pinching it. No head-gaze. (Beam tap also confirms the hand-pointed cell as a backup.)
+        // Primary: pinch the cell/piece nearest your fingertip. Fallback (when the hand isn't tracked, since
+        // hand tracking is flaky on this hardware): head-gaze pointer + Beam tap, so you're never stuck.
+        string _inputDbg = "";
         void UpdateGaze(out int space, out bool hit, out bool confirm)
         {
-            const float maxDist = 0.09f; // fingertip within ~9cm of a cell center points at it
+            const float maxDist = 0.10f; // fingertip within ~10cm of a cell center points at it
             space = -1; hit = false; confirm = false;
+
+            bool handPointing = false;
             if (_hand != null && _hand.TryGetTip(out var tip, out bool pinch))
             {
-                hit = _board.NearestSpace(tip, maxDist, out space);
-                _input.SetReticle(hit ? _board.WorldPos(space) : tip);
-                confirm = (pinch || _input.ConfirmDown) && hit;
-                if (confirm) Debug.Log($"[Dejarik] pinch -> space={space}");
+                if (_board.NearestSpace(tip, maxDist, out space)) { hit = true; handPointing = true; _input.SetReticle(_board.WorldPos(space)); }
+                if (pinch && hit) { confirm = true; Debug.Log($"[Dejarik] pinch -> space={space}"); }
             }
-            else
+
+            if (!handPointing) // gaze fallback
             {
-                _input.SetReticle(null);
+                hit = _board.Raycast(_input.CurrentRay, out space);
+                _input.SetReticle(hit ? _board.WorldPos(space) : (Vector3?)null);
+                if (_input.ConfirmDown && hit) { confirm = true; Debug.Log($"[Dejarik] gaze tap -> space={space}"); }
             }
+
+            _inputDbg = _hand != null ? _hand.Status : "no hand selector";
         }
 
         // ---- bot ----
@@ -426,6 +432,11 @@ namespace Dejarik.View
                 GUI.Label(new Rect(box.x + 14, box.y + 8, box.width - 20, box.height - 12),
                     $"{st.Name}  ({who})\nAttack    {st.Attack}\nDefense  {st.Defense}\nMove      {st.Movement}", ps);
             }
+
+            // Input/hand-tracking status (diagnostic), just above the buttons.
+            var dbg = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(h * 0.018f), alignment = TextAnchor.MiddleCenter };
+            dbg.normal.textColor = new Color(0.6f, 0.85f, 1f);
+            GUI.Label(new Rect(margin, h - h * 0.06f - h * 0.10f - h * 0.05f, w - 2 * margin, h * 0.045f), $"input: {_inputDbg}", dbg);
 
             // Three buttons in a row that always fits the width, lifted off the bottom safe area.
             var bstyle = new GUIStyle(GUI.skin.button) { fontSize = Mathf.RoundToInt(h * 0.022f), wordWrap = true };

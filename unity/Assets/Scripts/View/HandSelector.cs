@@ -18,6 +18,10 @@ namespace Dejarik.View
         bool _pinching;
         static readonly List<XRHandSubsystem> s_subsystems = new List<XRHandSubsystem>();
 
+        // Diagnostics surfaced to the HUD / log so we can see why pinch may not register.
+        public string Status { get; private set; } = "init";
+        float _nextLog;
+
         void Awake()
         {
             var xrOrigin = FindFirstObjectByType<XROrigin>();
@@ -37,14 +41,15 @@ namespace Dejarik.View
             worldTip = default;
             pinchDown = false;
             EnsureSubsystem();
-            if (_subsys == null) return false;
+            if (_subsys == null) { Status = "no hand subsystem"; Log(); return false; }
 
             foreach (var hand in new[] { _subsys.rightHand, _subsys.leftHand })
             {
                 if (!hand.isTracked) continue;
                 var indexJoint = hand.GetJoint(XRHandJointID.IndexTip);
                 var thumbJoint = hand.GetJoint(XRHandJointID.ThumbTip);
-                if (!indexJoint.TryGetPose(out var iPose) || !thumbJoint.TryGetPose(out var tPose)) continue;
+                if (!indexJoint.TryGetPose(out var iPose) || !thumbJoint.TryGetPose(out var tPose))
+                { Status = "tracked, no joint pose"; Log(); continue; }
 
                 Vector3 iTip = ToWorld(iPose.position);
                 Vector3 tTip = ToWorld(tPose.position);
@@ -53,9 +58,20 @@ namespace Dejarik.View
                 float d = Vector3.Distance(iTip, tTip);
                 if (!_pinching && d < PinchOn) { _pinching = true; pinchDown = true; }
                 else if (_pinching && d > PinchOff) { _pinching = false; }
+                Status = $"tracked tip={iTip:F2} pinchDist={d:F3}{(pinchDown ? " PINCH" : "")}";
+                Log();
                 return true;
             }
+            Status = "subsystem up, no hand tracked";
+            Log();
             return false;
+        }
+
+        void Log()
+        {
+            if (Time.time < _nextLog) return;
+            _nextLog = Time.time + 1f;
+            Debug.Log($"[Hand] {Status}");
         }
 
         Vector3 ToWorld(Vector3 trackingSpacePos) =>

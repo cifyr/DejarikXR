@@ -226,8 +226,9 @@ namespace Dejarik.View
             Destroy(gameObject);
         }
 
-        // Corrects for the imported models' intrinsic forward axis (set once we see them on the optics).
-        public static float FacingOffsetDeg = 180f;
+        // Corrects for the imported models' intrinsic forward axis. On-device, 180 faced them away from
+        // center, so 0 is correct: models' +Z is their front, facing the board center at rest (like the web).
+        public static float FacingOffsetDeg = 0f;
 
         static float YawToCenter(int space)
         {

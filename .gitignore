@@ -54,3 +54,6 @@ unity/vendor/
 # Large Blender scene assets (exported glb go to the device, not the repo)
 assets/scenes/*.glb
 assets/scenes/*.gltf
+*.keystore
+*.jks
+.dejarik-signing/

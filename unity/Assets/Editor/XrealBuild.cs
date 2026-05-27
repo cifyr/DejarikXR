@@ -64,5 +64,52 @@ namespace XrealAR.EditorTools
             if (s.result != BuildResult.Succeeded)
                 EditorApplication.Exit(1);
         }
+
+        // Publishable, release-signed APK. Keystore path/alias and passwords come from environment variables
+        // so secrets never persist into ProjectSettings.asset; signing is applied in-memory for this build
+        // only (no SaveAssets). Version comes from env too. Env vars:
+        //   DEJARIK_KS_PATH, DEJARIK_KS_PASS, DEJARIK_KEY_ALIAS, DEJARIK_KEY_PASS,
+        //   DEJARIK_VERSION (default 1.0), DEJARIK_VERSION_CODE (default 1), DEJARIK_OUT (default build/DejarikXR-release.apk)
+        public static void BuildReleaseApk()
+        {
+            PlayerSettings.bundleVersion = Env("DEJARIK_VERSION", "1.0");
+            PlayerSettings.Android.bundleVersionCode = int.Parse(Env("DEJARIK_VERSION_CODE", "1"));
+
+            string ks = Env("DEJARIK_KS_PATH", null);
+            if (string.IsNullOrEmpty(ks))
+                throw new InvalidOperationException("DEJARIK_KS_PATH not set; cannot produce a release-signed APK");
+            PlayerSettings.Android.useCustomKeystore = true;
+            PlayerSettings.Android.keystoreName = ks;
+            PlayerSettings.Android.keystorePass = Env("DEJARIK_KS_PASS", "");
+            PlayerSettings.Android.keyaliasName = Env("DEJARIK_KEY_ALIAS", "dejarik");
+            PlayerSettings.Android.keyaliasPass = Env("DEJARIK_KEY_PASS", "");
+
+            var enabled = Array.FindAll(EditorBuildSettings.scenes, s => s.enabled);
+            if (enabled.Length == 0)
+                throw new InvalidOperationException("no scenes in Build Settings; add the AR scene before building");
+
+            string outApk = Env("DEJARIK_OUT", "build/DejarikXR-release.apk");
+            var opts = new BuildPlayerOptions
+            {
+                scenes = Array.ConvertAll(enabled, s => s.path),
+                locationPathName = outApk,
+                target = BuildTarget.Android,
+                targetGroup = BuildTargetGroup.Android,
+                options = BuildOptions.None, // release (no Development flag)
+            };
+
+            Debug.Log($"[XrealBuild] RELEASE build v{PlayerSettings.bundleVersion}({PlayerSettings.Android.bundleVersionCode}) signed with {ks} -> {outApk}");
+            var report = BuildPipeline.BuildPlayer(opts);
+            var s = report.summary;
+            Debug.Log($"[XrealBuild] result={s.result} totalSize={s.totalSize} errors={s.totalErrors} time={s.totalTime}");
+            if (s.result != BuildResult.Succeeded)
+                EditorApplication.Exit(1);
+        }
+
+        static string Env(string key, string fallback)
+        {
+            string v = Environment.GetEnvironmentVariable(key);
+            return string.IsNullOrEmpty(v) ? fallback : v;
+        }
     }
 }

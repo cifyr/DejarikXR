@@ -36,10 +36,11 @@ namespace Dejarik.View
         int _ptrSpace = -1;
         bool _ptrConfirm;
 
-        // Phone-screen action buttons (always reachable by tapping the Beam, even if the board drifts).
+        // Action buttons on the phone touchscreen (always reachable on the physical Beam).
         readonly Rect[] _btnRects = new Rect[3];
         Action[] _btnActions;
         GUIStyle _btnStyle;
+
 
         GameState _state;
         Rng _rng;
@@ -65,7 +66,7 @@ namespace Dejarik.View
             _board = rootGO.AddComponent<BoardView>();
             _board.Build();
             _world = gameObject.AddComponent<WorldHud>();
-            _world.Build(_board.Root, Recenter, PinBoard, () => { _ = NewGame(); });
+            _world.Build();
             _btnActions = new Action[] { Recenter, PinBoard, () => { _ = NewGame(); } };
             Recenter();
 
@@ -234,9 +235,9 @@ namespace Dejarik.View
 
             ComputeButtonRects();
             _ptrSpace = -1; _ptrConfirm = false;
-            const float maxDist = 0.13f; // fingertip within ~13cm selects (board radius ~0.6 m)
+            const float maxDist = 0.13f; // fingertip within ~13cm of a cell selects it
 
-            // A tap on the Beam touchscreen: a phone-button press, else a board-confirm.
+            // A tap on the Beam touchscreen: first try the phone buttons, else it's a board-confirm.
             bool tap = false; Vector2 tapGui = default;
             var ts = Touchscreen.current;
             if (ts != null)
@@ -246,17 +247,17 @@ namespace Dejarik.View
                 for (int i = 0; i < 3; i++)
                     if (_btnRects[i].Contains(tapGui)) { Debug.Log($"[Dejarik] phone button {i}"); _btnActions[i]?.Invoke(); tap = false; break; }
 
-            // Board pointer: pinch-primary; gaze only when no hand is tracked. A leftover phone tap also confirms.
-            bool confirm;
-            if (_hand != null && _hand.TryGetTip(out var tip, out bool pinch))
+            // Board: reach + pinch the cell nearest your fingertip; gaze + tap only if no hand is tracked.
+            bool pinch = false; Vector3 tip = default;
+            bool handTracked = _hand != null && _hand.TryGetTip(out tip, out pinch);
+            bool confirm = pinch || tap;
+            if (handTracked)
             {
-                confirm = pinch || tap;
                 if (_board.NearestSpace(tip, maxDist, out var sp)) { _ptrSpace = sp; _input.SetReticle(_board.WorldPos(sp)); }
                 else _input.SetReticle(tip);
             }
             else
             {
-                confirm = tap;
                 if (_board.Raycast(_input.CurrentRay, out var sp)) { _ptrSpace = sp; _input.SetReticle(_board.WorldPos(sp)); }
                 else _input.SetReticle(null);
             }
@@ -266,17 +267,17 @@ namespace Dejarik.View
         void ComputeButtonRects()
         {
             float w = Screen.width, h = Screen.height, margin = w * 0.04f, gap = w * 0.025f;
-            float bw = (w - 2 * margin - 2 * gap) / 3f, bh = h * 0.10f, y = h - bh - h * 0.05f;
+            float bw = (w - 2 * margin - 2 * gap) / 3f, bh = h * 0.11f, y = h - bh - h * 0.05f;
             _btnRects[0] = new Rect(margin, y, bw, bh);
             _btnRects[1] = new Rect(margin + bw + gap, y, bw, bh);
             _btnRects[2] = new Rect(margin + 2 * (bw + gap), y, bw, bh);
         }
 
-        // Draw the action buttons on the phone screen (taps handled in Update via Touchscreen hit-testing).
+        // Action buttons drawn on the phone screen; taps handled in Update via Touchscreen hit-testing.
         void OnGUI()
         {
             if (!_setupDone) return;
-            _btnStyle ??= new GUIStyle(GUI.skin.button) { fontSize = Mathf.RoundToInt(Screen.height * 0.022f), wordWrap = true };
+            _btnStyle ??= new GUIStyle(GUI.skin.button) { fontSize = Mathf.RoundToInt(Screen.height * 0.024f), wordWrap = true };
             ComputeButtonRects();
             GUI.Button(_btnRects[0], "RECENTER", _btnStyle);
             GUI.Button(_btnRects[1], "PIN BOARD", _btnStyle);

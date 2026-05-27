@@ -59,16 +59,16 @@ namespace XrealAR.EditorTools
 
         static void Capture()
         {
-            // Frame the board (DejarikGame now places it ~ (0, -0.35, 0.5) relative to the origin camera).
-            Vector3 target = new Vector3(0f, -0.35f, 0.5f);
+            // The HUD head-locks to Camera.main (origin, +Z in the editor), so view from the head pose,
+            // tilted slightly down to also frame the board below.
             var go = new GameObject("CaptureCam");
             var cam = go.AddComponent<Camera>();
             cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.10f, 0.10f, 0.13f, 1f); // dark gray, not pure black, to spot a black plane
+            cam.backgroundColor = new Color(0.10f, 0.10f, 0.13f, 1f);
             cam.nearClipPlane = 0.01f;
-            cam.fieldOfView = 55f;
-            go.transform.position = target + new Vector3(0.0f, 0.7f, -1.05f); // pulled back to frame board + HUD + buttons
-            go.transform.LookAt(target + new Vector3(0f, 0.18f, 0f));
+            cam.fieldOfView = 70f;
+            go.transform.position = Vector3.zero;
+            go.transform.rotation = Quaternion.Euler(8f, 0f, 0f); // look slightly down
 
             int w = 1280, h = 960;
             var rt = new RenderTexture(w, h, 24);

@@ -38,15 +38,17 @@ namespace Dejarik.View
         // Flat glowing board cell for the given role.
         public static Material Cell(CellRole role)
         {
+            // Brighter than the web (which leaned on bloom): on see-through optics a dim cell reads as
+            // black/transparent, so the base grid needs real emissive presence to be visible.
             (string color, Color emissive, float ei) spec = role switch
             {
-                CellRole.Move     => ("#0a3a4a", P0, 0.85f),
-                CellRole.Attack   => ("#4a1410", P1, 0.90f),
-                CellRole.Push     => ("#2a1a4a", Hex("#b478ff"), 0.90f),
-                CellRole.Selected => ("#0a3a4a", P0, 0.55f),
-                CellRole.Center   => ("#0d1c2e", Hex("#1f5c8a"), 0.18f),
-                CellRole.Light    => ("#16324a", Hex("#1f5c8a"), 0.08f),
-                _                 => ("#08141f", Hex("#0a2030"), 0.06f),
+                CellRole.Move     => ("#0a3a4a", P0, 1.4f),
+                CellRole.Attack   => ("#4a1410", P1, 1.4f),
+                CellRole.Push     => ("#2a1a4a", Hex("#b478ff"), 1.4f),
+                CellRole.Selected => ("#0a3a4a", P0, 1.0f),
+                CellRole.Center   => ("#123048", Hex("#2f7fb8"), 0.7f),
+                CellRole.Light    => ("#163a55", Hex("#2f86c0"), 0.8f),
+                _                 => ("#0e2c44", Hex("#246a9c"), 0.55f),
             };
             var mat = new Material(Shader.Find("Standard"));
             mat.color = Hex(spec.color);

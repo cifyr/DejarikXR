@@ -25,6 +25,7 @@ namespace Dejarik.View
         DiceView _dice;
         GameAudio _audio;
         GazeSelector _input;
+        HandSelector _hand;
         AnchorPlacementController _anchors;
 
         GameState _state;
@@ -38,6 +39,7 @@ namespace Dejarik.View
         async void Start()
         {
             _input = gameObject.AddComponent<GazeSelector>();
+            _hand = gameObject.AddComponent<HandSelector>();
             _dice = gameObject.AddComponent<DiceView>();
             _audio = gameObject.AddComponent<GameAudio>();
             _anchors = FindFirstObjectByType<AnchorPlacementController>();
@@ -71,6 +73,7 @@ namespace Dejarik.View
                 tasks.Add(pv.Init(p));
             }
             await Task.WhenAll(tasks);
+            Debug.Log($"[Dejarik] {_views.Count} pieces loaded; board pos={_board.Root.position} scale={_board.Root.lossyScale.x:F3}");
 
             _setupDone = true;
             StartCoroutine(RunGame());
@@ -139,8 +142,8 @@ namespace Dejarik.View
             var atkIds = Engine.AttackTargets(_state, _selectedId);
             var atkSpaceToId = atkIds.ToDictionary(id => Engine.GetPiece(_state, id).Space, id => id);
 
-            if (moves.Contains(sp)) { _state = Engine.ApplyMove(_state, _selectedId, sp); Deselect(); return true; }
-            if (atkSpaceToId.TryGetValue(sp, out var defId)) { _state = Engine.ApplyAttack(_state, _selectedId, defId, _rng); Deselect(); return true; }
+            if (moves.Contains(sp)) { Debug.Log($"[Dejarik] move {_selectedId} -> {sp}"); _state = Engine.ApplyMove(_state, _selectedId, sp); Deselect(); return true; }
+            if (atkSpaceToId.TryGetValue(sp, out var defId)) { Debug.Log($"[Dejarik] attack {_selectedId} -> {defId}"); _state = Engine.ApplyAttack(_state, _selectedId, defId, _rng); Deselect(); return true; }
             if (piece != null && piece.Owner == Human) { Select(piece.Id); return false; }
             Deselect();
             return false;
@@ -189,11 +192,23 @@ namespace Dejarik.View
             _board.SetHighlights(moves, atkSpaces, null, selSpace);
         }
 
+        // Unified selection: prefer the tracked hand (point near a cell, pinch to tap); otherwise fall back
+        // to head-gaze + a touchscreen tap. `space` is the pointed board space (or -1), `confirm` the tap.
         void UpdateGaze(out int space, out bool hit, out bool confirm)
         {
+            const float maxDist = 0.08f; // fingertip within ~8cm of a cell center selects it
+            if (_hand != null && _hand.TryGetTip(out var tip, out bool pinch))
+            {
+                hit = _board.NearestSpace(tip, maxDist, out space);
+                _input.SetReticle(hit ? _board.WorldPos(space) : tip);
+                confirm = pinch;
+                if (confirm) Debug.Log($"[Dejarik] hand pinch -> space={space} hit={hit}");
+                return;
+            }
             hit = _board.Raycast(_input.CurrentRay, out space);
             _input.SetReticle(hit ? _board.WorldPos(space) : (Vector3?)null);
             confirm = _input.ConfirmDown;
+            if (confirm) Debug.Log($"[Dejarik] gaze tap -> space={space} hit={hit}");
         }
 
         // ---- bot ----

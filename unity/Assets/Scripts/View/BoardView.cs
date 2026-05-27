@@ -85,6 +85,19 @@ namespace Dejarik.View
             return false;
         }
 
+        // Nearest board space to a world point (for hand/fingertip selection), within maxDist meters.
+        public bool NearestSpace(Vector3 world, float maxDist, out int space)
+        {
+            space = -1;
+            float best = maxDist;
+            foreach (var sp in _rend.Keys)
+            {
+                float d = Vector3.Distance(world, WorldPos(sp));
+                if (d < best) { best = d; space = sp; }
+            }
+            return space >= 0;
+        }
+
         // The extracted holochess table glb: scale so its top rim matches the play radius, drop it so the
         // open top sits just below the cells (mirrors BoardTable in the web game).
         const float BoardTopRadius = 0.41f;

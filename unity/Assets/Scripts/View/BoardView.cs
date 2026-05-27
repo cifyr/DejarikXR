@@ -15,6 +15,10 @@ namespace Dejarik.View
         readonly Dictionary<int, MeshRenderer> _rend = new Dictionary<int, MeshRenderer>();
         readonly Dictionary<int, CellRole> _baseRole = new Dictionary<int, CellRole>();
         readonly Dictionary<Collider, int> _spaceByCol = new Dictionary<Collider, int>();
+        Material _rimMat;
+
+        // Recolors the board rim to show whose turn it is (blue = you, orange = opponent).
+        public void SetRimColor(Color c) { if (_rimMat) _rimMat.color = c; }
 
         public Transform Root => transform;
         public Vector3 WorldPos(int space) => transform.TransformPoint(BoardLayout.Pos3D(space));
@@ -30,12 +34,13 @@ namespace Dejarik.View
                     i % 2 == 1 ? CellRole.Light : CellRole.Dark);
             }
 
-            // Glowing rim.
+            // Glowing rim (also the turn indicator — recolored to the active player's color).
             var rim = new GameObject("rim");
             rim.transform.SetParent(transform, false);
             rim.transform.localPosition = new Vector3(0f, BoardLayout.BaseTop, 0f);
             rim.AddComponent<MeshFilter>().sharedMesh = BoardLayout.RingMesh(BoardLayout.Rim - 0.08f, BoardLayout.Rim);
-            rim.AddComponent<MeshRenderer>().sharedMaterial = HoloMaterials.RimGlow();
+            _rimMat = HoloMaterials.RimGlow();
+            rim.AddComponent<MeshRenderer>().sharedMaterial = _rimMat;
 
             _ = LoadTable();
         }

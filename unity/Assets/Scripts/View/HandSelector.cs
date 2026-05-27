@@ -15,19 +15,13 @@ namespace Dejarik.View
         const float PinchOff = 0.065f;  // hysteresis to release
 
         XRHandSubsystem _subsys;
-        Transform _origin;
+        Transform _cam;
         bool _pinching;
         static readonly List<XRHandSubsystem> s_subsystems = new List<XRHandSubsystem>();
 
         // Diagnostics surfaced to the HUD / log so we can see why pinch may not register.
         public string Status { get; private set; } = "init";
         float _nextLog;
-
-        void Awake()
-        {
-            var xrOrigin = FindFirstObjectByType<XROrigin>();
-            _origin = xrOrigin != null ? xrOrigin.transform : null;
-        }
 
         void EnsureSubsystem()
         {
@@ -75,7 +69,12 @@ namespace Dejarik.View
             Debug.Log($"[Hand] {Status}");
         }
 
-        Vector3 ToWorld(Vector3 trackingSpacePos) =>
-            _origin != null ? _origin.TransformPoint(trackingSpacePos) : trackingSpacePos;
+        // On this device the joint poses come back head-relative (hand reads y~-0.4 while the floor-
+        // referenced camera is at y~1.0), so convert through the camera transform to get world space.
+        Vector3 ToWorld(Vector3 headRelativePos)
+        {
+            if (_cam == null && Camera.main != null) _cam = Camera.main.transform;
+            return _cam != null ? _cam.TransformPoint(headRelativePos) : headRelativePos;
+        }
     }
 }

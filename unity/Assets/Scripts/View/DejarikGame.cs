@@ -15,9 +15,9 @@ namespace Dejarik.View
     // The pure rules live in Dejarik.Engine; this class only renders/animates state transitions.
     public class DejarikGame : MonoBehaviour
     {
-        [SerializeField] float tableRadius = 0.6f;     // board play-radius in meters
-        [SerializeField] float reachForward = 0.85f;   // board distance in front of the head
-        [SerializeField] float reachDown = 0.2f;       // board drop below eye level
+        [SerializeField] float tableRadius = 0.55f;    // board play-radius in meters
+        [SerializeField] float reachForward = 0.55f;   // board distance in front of the head (within reach)
+        [SerializeField] float reachDown = 0.4f;       // board drop below eye level (to hand height)
         const Player Human = Player.P0;
 
         // Combat timing (ms), mirroring src/game/timing.ts.
@@ -235,7 +235,7 @@ namespace Dejarik.View
 
             ComputeButtonRects();
             _ptrSpace = -1; _ptrConfirm = false;
-            const float maxDist = 0.13f; // fingertip within ~13cm of a cell selects it
+            const float maxDist = 0.2f; // fingertip within ~20cm of a cell selects it (forgiving)
 
             // A tap on the Beam touchscreen: first try the phone buttons, else it's a board-confirm.
             bool tap = false; Vector2 tapGui = default;
@@ -247,25 +247,24 @@ namespace Dejarik.View
                 for (int i = 0; i < 3; i++)
                     if (_btnRects[i].Contains(tapGui)) { Debug.Log($"[Dejarik] phone button {i}"); _btnActions[i]?.Invoke(); tap = false; break; }
 
-            // Board selection by pointing: cast a ray from the eye THROUGH the fingertip onto the board, so
-            // whatever cell your finger visually overlaps is picked (robust to hand-tracking depth error).
-            // Pinch confirms. Falls back to head-gaze + tap when no hand is tracked.
+            // Direct pinch: select the cell/piece nearest your fingertip in 3D, and pinch to confirm.
+            // (Gaze + tap fallback only when no hand is tracked.)
             bool pinch = false; Vector3 tip = default;
             bool handTracked = _hand != null && _hand.TryGetTip(out tip, out pinch);
             bool confirm = pinch || tap;
-            var cam = Camera.main;
-            if (handTracked && cam != null)
+            if (handTracked)
             {
-                var ray = new Ray(cam.transform.position, tip - cam.transform.position);
-                if (_board.Raycast(ray, out var sp)) { _ptrSpace = sp; _input.SetReticle(_board.WorldPos(sp)); }
-                else { _board.NearestSpace(tip, maxDist, out _ptrSpace); _input.SetReticle(_ptrSpace >= 0 ? _board.WorldPos(_ptrSpace) : tip); }
+                if (_board.NearestSpace(tip, maxDist, out var sp)) { _ptrSpace = sp; _input.SetReticle(_board.WorldPos(sp)); }
+                else _input.SetReticle(tip);
             }
             else
             {
                 if (_board.Raycast(_input.CurrentRay, out var sp)) { _ptrSpace = sp; _input.SetReticle(_board.WorldPos(sp)); }
                 else _input.SetReticle(null);
             }
-            if (confirm && _ptrSpace >= 0) { _ptrConfirm = true; Debug.Log($"[Dejarik] confirm space={_ptrSpace}"); }
+            if (confirm && _ptrSpace >= 0) { _ptrConfirm = true; Debug.Log($"[Dejarik] confirm space={_ptrSpace} tip={tip:F2}"); }
+
+            _board.SetRimColor(HoloMaterials.HoloFor(_state.Turn)); // rim shows whose turn it is
         }
 
         void ComputeButtonRects()

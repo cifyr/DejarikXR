@@ -43,14 +43,16 @@ namespace Dejarik.View
             _reticle = go.transform;
         }
 
-        // Orchestrator calls this with the board hit point (or null to park the reticle at a default depth).
+        // Orchestrator calls this with the current target point, or null to hide the reticle (so it never
+        // parks as a stray square in front of the face).
         public void SetReticle(Vector3? worldPoint)
         {
             if (_cam == null) return;
-            Vector3 p = worldPoint ?? (_cam.transform.position + _cam.transform.forward * 0.8f);
-            _reticle.position = p;
-            _reticle.rotation = Quaternion.LookRotation(p - _cam.transform.position);
-            _reticleMat.color = worldPoint.HasValue ? HoloMaterials.P0 : new Color(1, 1, 1, 0.5f);
+            if (!worldPoint.HasValue) { _reticle.gameObject.SetActive(false); return; }
+            _reticle.gameObject.SetActive(true);
+            _reticle.position = worldPoint.Value;
+            _reticle.rotation = Quaternion.LookRotation(worldPoint.Value - _cam.transform.position);
+            _reticleMat.color = HoloMaterials.P0;
         }
     }
 }

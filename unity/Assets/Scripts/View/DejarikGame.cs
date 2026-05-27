@@ -15,9 +15,8 @@ namespace Dejarik.View
     // The pure rules live in Dejarik.Engine; this class only renders/animates state transitions.
     public class DejarikGame : MonoBehaviour
     {
-        [SerializeField] float tableRadius = 0.55f;    // board play-radius in meters
-        [SerializeField] float reachForward = 0.55f;   // board distance in front of the head (within reach)
-        [SerializeField] float reachDown = 0.4f;       // board drop below eye level (to hand height)
+        [SerializeField] float tableRadius = 0.5f;     // board play-radius in meters
+        [SerializeField] float reachDistance = 0.6f;   // board distance along your gaze
         const Player Human = Player.P0;
 
         // Combat timing (ms), mirroring src/game/timing.ts.
@@ -255,7 +254,7 @@ namespace Dejarik.View
             if (handTracked)
             {
                 if (_board.NearestSpace(tip, maxDist, out var sp)) { _ptrSpace = sp; _input.SetReticle(_board.WorldPos(sp)); }
-                else _input.SetReticle(tip);
+                else _input.SetReticle(null);
             }
             else
             {
@@ -438,15 +437,17 @@ namespace Dejarik.View
                 }
         }
 
-        // Place the board in front of and below the head. Rotate it so your (P0) side faces you: P0 pieces
-        // sit on the board's +Z, so local +Z must point back toward the camera (LookRotation(-fwd)).
+        // Place the board where you're looking (centered on your gaze, with a slight downward bias so the
+        // flat board's face is visible). Rotate it so your (P0) side faces you: P0 sits on local +Z, so
+        // local +Z points back toward the camera. Tap RECENTER while looking where you want the board.
         void Recenter()
         {
             var cam = Camera.main;
-            if (cam == null) { _board.Root.position = new Vector3(0f, -reachDown, reachForward); _board.Root.rotation = Quaternion.Euler(0f, 180f, 0f); return; }
-            Vector3 fwd = cam.transform.forward; fwd.y = 0f; fwd = fwd.sqrMagnitude < 1e-4f ? Vector3.forward : fwd.normalized;
-            _board.Root.position = cam.transform.position + fwd * reachForward + Vector3.up * -reachDown;
-            _board.Root.rotation = Quaternion.LookRotation(-fwd, Vector3.up);
+            if (cam == null) { _board.Root.SetPositionAndRotation(new Vector3(0f, -0.25f, 0.6f), Quaternion.Euler(0f, 180f, 0f)); return; }
+            Vector3 fwd = cam.transform.forward;
+            _board.Root.position = cam.transform.position + fwd * reachDistance + Vector3.down * 0.12f;
+            Vector3 flat = fwd; flat.y = 0f; flat = flat.sqrMagnitude < 1e-4f ? Vector3.forward : flat.normalized;
+            _board.Root.rotation = Quaternion.LookRotation(-flat, Vector3.up);
         }
     }
 }

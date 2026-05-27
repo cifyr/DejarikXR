@@ -1,112 +1,69 @@
+using System.Collections.Generic;
 using UnityEngine;
+using Dejarik;
 
 namespace Dejarik.View
 {
-    // Procedural holographic SFX (no asset files): short generated clips for dice, strikes, deaths,
-    // moves, and victory. Spatialized at the board so they read as coming from the hologram.
+    // Plays the imported MP3 SFX pack, each from its 3D world location (a creature's roar comes from that
+    // creature, the dice from the board, a click from the cell you pushed). Per-creature attack/hit/death
+    // clips live in Resources/Audio. Move + click are short synth blips. Clips play at ~half volume.
     public class GameAudio : MonoBehaviour
     {
-        AudioSource _src;
+        readonly Dictionary<string, AudioClip> _cache = new Dictionary<string, AudioClip>();
 
-        void Awake()
+        AudioClip Load(string name)
         {
-            _src = gameObject.AddComponent<AudioSource>();
-            _src.spatialBlend = 1f;
-            _src.minDistance = 0.4f;
-            _src.maxDistance = 12f;
-            _src.rolloffMode = AudioRolloffMode.Linear;
-            _src.dopplerLevel = 0f;
+            if (_cache.TryGetValue(name, out var c)) return c;
+            c = Resources.Load<AudioClip>($"Audio/{name}");
+            _cache[name] = c;
+            if (c == null) Debug.LogWarning($"[Audio] missing clip Audio/{name}");
+            return c;
         }
 
-        public void PlayDice() => Play(Noise(0.5f, 0.25f, 1600f), 0.5f);
-        public void PlayRoar() => Play(Roar(0.6f), 0.7f);
-        public void PlayMove() => Play(Tone(0.12f, 420f, 0.3f), 0.4f);
-        public void PlayStrike() => Play(Tone(0.18f, 180f, 0.02f, true), 0.8f);
-        public void PlayDeath() => Play(Sweep(0.5f, 900f, 90f), 0.7f);
-        public void PlayVictory() => Play(Chord(0.9f, new[] { 392f, 523f, 659f }), 0.6f);
+        static string Key(PieceType t) => Pieces.IdOf(t);
 
-        void Play(AudioClip clip, float vol) { if (clip != null) _src.PlayOneShot(clip, vol); }
+        // Per-creature, at the creature's position.
+        public void Attack(PieceType t, Vector3 pos, bool finisher) => PlayAt(Load($"{Key(t)}_attack"), pos, finisher ? 0.65f : 0.5f);
+        public void Hit(PieceType t, Vector3 pos) => PlayAt(Load($"{Key(t)}_hit"), pos, 0.5f);
+        public void Death(PieceType t, Vector3 pos) => PlayAt(Load($"{Key(t)}_death"), pos, 0.5f);
 
-        static AudioClip Tone(float dur, float freq, float decay, bool noisy = false)
+        // Shared, positioned at the board / event.
+        public void Dice(Vector3 pos) => PlayAt(Load("dice"), pos, 0.5f);
+        public void Victory(Vector3 pos) => PlayAt(Load("victory"), pos, 0.55f);
+
+        // Synth blips (no MP3): a click where you selected, a soft blip where a piece moves.
+        public void Click(Vector3 pos) => PlayAt(Tone(0.05f, 1300f, 0.02f), pos, 0.45f);
+        public void Move(Vector3 pos) => PlayAt(Tone(0.12f, 520f, 0.22f), pos, 0.35f);
+
+        // Spawn a temporary 3D audio source at the world position so the sound comes from there.
+        void PlayAt(AudioClip clip, Vector3 pos, float vol)
+        {
+            if (clip == null) return;
+            var go = new GameObject("sfx");
+            go.transform.position = pos;
+            var s = go.AddComponent<AudioSource>();
+            s.clip = clip;
+            s.volume = vol;
+            s.spatialBlend = 1f;          // fully 3D
+            s.minDistance = 0.3f;
+            s.maxDistance = 12f;
+            s.rolloffMode = AudioRolloffMode.Linear;
+            s.dopplerLevel = 0f;
+            s.Play();
+            Destroy(go, clip.length + 0.1f);
+        }
+
+        static AudioClip Tone(float dur, float freq, float decay)
         {
             int sr = 44100, n = (int)(sr * dur);
             var d = new float[n];
             for (int i = 0; i < n; i++)
             {
                 float t = i / (float)sr;
-                float env = Mathf.Exp(-t / Mathf.Max(0.001f, decay));
-                float s = Mathf.Sin(2f * Mathf.PI * freq * t);
-                if (noisy) s = 0.6f * s + 0.4f * (Random.value * 2f - 1f);
-                d[i] = s * env;
+                d[i] = Mathf.Sin(2f * Mathf.PI * freq * t) * Mathf.Exp(-t / Mathf.Max(0.001f, decay));
             }
-            return Clip("tone", d, sr);
-        }
-
-        static AudioClip Sweep(float dur, float f0, float f1)
-        {
-            int sr = 44100, n = (int)(sr * dur);
-            var d = new float[n];
-            float phase = 0f;
-            for (int i = 0; i < n; i++)
-            {
-                float t = i / (float)n;
-                float f = Mathf.Lerp(f0, f1, t);
-                phase += 2f * Mathf.PI * f / sr;
-                d[i] = Mathf.Sin(phase) * (1f - t);
-            }
-            return Clip("sweep", d, sr);
-        }
-
-        static AudioClip Noise(float dur, float decay, float lp)
-        {
-            int sr = 44100, n = (int)(sr * dur);
-            var d = new float[n];
-            float s = 0f, a = lp / (lp + sr);
-            for (int i = 0; i < n; i++)
-            {
-                float t = i / (float)sr;
-                s = Mathf.Lerp(s, Random.value * 2f - 1f, a);
-                d[i] = s * Mathf.Exp(-t / decay);
-            }
-            return Clip("noise", d, sr);
-        }
-
-        // Low growl with vibrato + grit — a creature roar.
-        static AudioClip Roar(float dur)
-        {
-            int sr = 44100, n = (int)(sr * dur);
-            var d = new float[n];
-            for (int i = 0; i < n; i++)
-            {
-                float t = i / (float)sr;
-                float vib = 1f + 0.06f * Mathf.Sin(2f * Mathf.PI * 18f * t);
-                float f = 110f * vib;
-                float saw = 2f * (t * f - Mathf.Floor(0.5f + t * f));
-                float env = Mathf.Min(1f, t * 10f) * Mathf.Exp(-t / 0.4f);
-                d[i] = (0.7f * saw + 0.3f * (Random.value * 2f - 1f)) * env;
-            }
-            return Clip("roar", d, sr);
-        }
-
-        static AudioClip Chord(float dur, float[] freqs)
-        {
-            int sr = 44100, n = (int)(sr * dur);
-            var d = new float[n];
-            for (int i = 0; i < n; i++)
-            {
-                float t = i / (float)sr;
-                float env = Mathf.Min(1f, t * 8f) * Mathf.Exp(-t / 0.6f);
-                float s = 0f;
-                foreach (var f in freqs) s += Mathf.Sin(2f * Mathf.PI * f * t);
-                d[i] = s / freqs.Length * env;
-            }
-            return Clip("chord", d, sr);
-        }
-
-        static AudioClip Clip(string name, float[] data, int sr)
-        {
-            var c = AudioClip.Create(name, data.Length, 1, sr, false);
-            c.SetData(data, 0);
+            var c = AudioClip.Create("blip", n, 1, sr, false);
+            c.SetData(d, 0);
             return c;
         }
     }

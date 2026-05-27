@@ -267,7 +267,7 @@ namespace Dejarik.View
             }
             bool selectEdge = (!_pokePrev && poke) || pinch; // poke is edge-triggered; pinch also confirms
             _pokePrev = poke;
-            if (selectEdge && _ptrSpace >= 0) { _ptrConfirm = true; Debug.Log($"[Dejarik] select space={_ptrSpace} tip={tip:F2} poke={poke} pinch={pinch}"); }
+            if (selectEdge && _ptrSpace >= 0) { _ptrConfirm = true; _audio.Click(_board.WorldPos(_ptrSpace)); Debug.Log($"[Dejarik] select space={_ptrSpace} tip={tip:F2} poke={poke} pinch={pinch}"); }
 
             _board.SetRimColor(HoloMaterials.HoloFor(_state.Turn)); // rim shows whose turn it is
         }
@@ -342,7 +342,7 @@ namespace Dejarik.View
         {
             _board.ClearHighlights();
             _hud = _state.Winner.HasValue ? $"Player {_state.Winner.Value.Num()} wins!" : "Draw.";
-            _audio.PlayVictory();
+            _audio.Victory(_board.WorldPos(Board.Center));
             foreach (var v in _views.Values)
                 if (_state.Winner.HasValue && v.Owner == _state.Winner.Value) v.PlayVictory();
             yield break;
@@ -362,7 +362,7 @@ namespace Dejarik.View
                 if (mv != null && _views.TryGetValue(mv.PieceId, out var v))
                 {
                     int finalSpace = Engine.GetPiece(after, mv.PieceId)?.Space ?? v.Space;
-                    _audio.PlayMove();
+                    _audio.Move(v.transform.position);
                     v.WalkAlong(mv.Path, finalSpace);
                     float t = 0f;
                     while (v != null && v.IsWalking && t < 6f) { t += Time.deltaTime; yield return null; }
@@ -382,7 +382,7 @@ namespace Dejarik.View
             _diceHud = $"{Pieces.Stats[combat.AttackerType.Value].Name}  {atkTotal}    vs    {defTotal}  {Pieces.Stats[combat.DefenderType.Value].Name}";
             Vector3 center = _board.WorldPos(Board.Center);
             _dice.ShowRoll(atkTotal, defTotal, combat.AttackDice.Length, combat.DefenseDice.Length, combat.AttackerOwner.Value, center);
-            _audio.PlayDice();
+            _audio.Dice(center);
 
             yield return new WaitForSeconds(COMBAT_LEAD / 1000f);
             // Square off: both combatants turn to face each other before the strike ("look before fighting").
@@ -394,9 +394,11 @@ namespace Dejarik.View
             }
 
             yield return new WaitForSeconds((STRIKE_AT - COMBAT_LEAD) / 1000f);
-            if (atkView != null) atkView.PlayAttack(combat.Outcome == Outcome.Kill);
-            _audio.PlayStrike();
-            _audio.PlayRoar();
+            if (atkView != null)
+            {
+                atkView.PlayAttack(combat.Outcome == Outcome.Kill);
+                _audio.Attack(combat.AttackerType.Value, atkView.transform.position, combat.Outcome == Outcome.Kill); // roar/strike
+            }
 
             yield return new WaitForSeconds((REACT_AT - STRIKE_AT) / 1000f);
             foreach (var d in deaths)
@@ -408,15 +410,21 @@ namespace Dejarik.View
                     {
                         var defAtk = attackFxs.Skip(1).FirstOrDefault();
                         if (defAtk != null && _views.TryGetValue(defAtk.PieceId, out var defv))
+                        {
                             defv.PlayAttack(true);
+                            _audio.Attack(combat.DefenderType.Value, defv.transform.position, true);
+                        }
                     }
                     dv.PlayDeathAndDissolve(d.ByType, DEATH_REMOVE - REACT_AT);
+                    _audio.Death(d.PieceTypeVal.Value, dv.transform.position);
                     _views.Remove(d.PieceId);
-                    _audio.PlayDeath();
                 }
             }
             if (deaths.Count == 0 && hit != null && _views.TryGetValue(hit.PieceId, out var hv2))
+            {
                 hv2.PlayHit();
+                _audio.Hit(combat.DefenderType.Value, hv2.transform.position);
+            }
 
             yield return new WaitForSeconds((DEATH_REMOVE - REACT_AT) / 1000f + 0.2f);
             _diceHud = null;

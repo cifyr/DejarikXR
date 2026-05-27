@@ -54,8 +54,10 @@ Shader "Dejarik/Hologram"
                 fixed4 tex = tex2D(_MainTex, i.uv);
                 float fres = pow(1.0 - saturate(dot(normalize(i.worldNormal), normalize(i.viewDir))), _RimPower);
                 float scan = 0.82 + 0.18 * sin(i.worldPos.y * 140.0 + _Time.y * 5.0);
-                fixed3 baseCol = lerp(tex.rgb * _HoloColor.rgb * 1.6, _HoloColor.rgb, 0.35);
-                fixed3 col = (baseCol * scan + _HoloColor.rgb * fres * 1.9) * _Glow;
+                // Keep the creature's own texture detail, shifted toward the holo color (a mix, like the web).
+                fixed3 tint = lerp(fixed3(1.0, 1.0, 1.0), _HoloColor.rgb, 0.55);
+                fixed3 baseCol = tex.rgb * tint * 1.5;
+                fixed3 col = (baseCol * scan + _HoloColor.rgb * fres * 1.6) * _Glow;
                 float alpha = saturate((_Alpha * scan + fres) );
                 return fixed4(col, alpha);
             }

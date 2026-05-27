@@ -5,38 +5,46 @@ using Dejarik;
 
 namespace Dejarik.View
 {
-    // Head-locked info HUD: world-space text (status, dice totals, selected-piece stats) that floats a fixed
-    // distance in front of the camera and follows the head, so it's always in view and renders correctly
-    // per-eye in the glasses (IMGUI can't — it draws once across the whole stereo backbuffer). Action buttons
-    // live on the phone touchscreen instead (see DejarikGame.OnGUI).
+    // Head-locked info HUD: world-space text (status, dice totals, piece stats) RIGIDLY parented to the
+    // camera so it's pinned exactly to the view with no lag (re-positioning each frame in LateUpdate trails
+    // the head). Kept within the glasses' narrow FOV. Action buttons live on the phone (DejarikGame.OnGUI).
     public class WorldHud : MonoBehaviour
     {
-        const float Depth = 0.62f;   // meters in front of the head
+        const float Depth = 0.5f;   // meters in front of the eyes
 
-        sealed class Item { public Transform Tr; public Vector2 Off; }
-        readonly List<Item> _items = new List<Item>();
+        Transform _root;
         TMP_Text _status, _dice, _stats;
-        Camera _cam;
 
         public void Build()
         {
-            _cam = Camera.main;
-            _status = MakeText("status", new Vector2(0f, 0.205f), 0.40f, Color.white, TextAlignmentOptions.Center, 1.3f);
-            _dice = MakeText("dice", new Vector2(0f, 0.135f), 0.52f, Color.white, TextAlignmentOptions.Center, 1.4f);
-            _stats = MakeText("stats", new Vector2(-0.34f, 0.02f), 0.40f, Color.white, TextAlignmentOptions.Left, 0.32f);
+            _root = new GameObject("HudRoot").transform;
+            Attach();
+            _status = MakeText("status", new Vector3(0f, 0.085f, Depth), 0.24f, Color.white, TextAlignmentOptions.Center, 0.7f);
+            _dice = MakeText("dice", new Vector3(0f, 0.030f, Depth), 0.30f, Color.white, TextAlignmentOptions.Center, 0.8f);
+            _stats = MakeText("stats", new Vector3(-0.16f, -0.04f, Depth), 0.20f, Color.white, TextAlignmentOptions.Left, 0.28f);
         }
 
-        TMP_Text MakeText(string name, Vector2 off, float size, Color color, TextAlignmentOptions align, float width)
+        void Attach()
+        {
+            var cam = Camera.main;
+            if (cam == null) return;
+            _root.SetParent(cam.transform, false);
+            _root.localPosition = Vector3.zero;
+            _root.localRotation = Quaternion.identity;
+        }
+
+        TMP_Text MakeText(string name, Vector3 localPos, float size, Color color, TextAlignmentOptions align, float width)
         {
             var go = new GameObject(name);
-            go.transform.SetParent(transform, false);
+            go.transform.SetParent(_root, false);
+            go.transform.localPosition = localPos;
+            go.transform.localRotation = Quaternion.identity; // faces +Z (forward) — readable, parented to the eye
             var tmp = go.AddComponent<TextMeshPro>();
             tmp.fontSize = size;
             tmp.color = color;
             tmp.alignment = align;
-            tmp.rectTransform.sizeDelta = new Vector2(width, 0.2f);
+            tmp.rectTransform.sizeDelta = new Vector2(width, 0.16f);
             tmp.text = "";
-            _items.Add(new Item { Tr = go.transform, Off = off });
             return tmp;
         }
 
@@ -53,17 +61,10 @@ namespace Dejarik.View
             _stats.text = $"{st.Name}\n<size=72%>({who})  ATK {st.Attack}  DEF {st.Defense}  MOV {st.Movement}</size>";
         }
 
+        // Re-attach if the camera wasn't ready at Build (rigid parenting otherwise needs no per-frame work).
         void LateUpdate()
         {
-            if (_cam == null) _cam = Camera.main;
-            if (_cam == null) return;
-            var ct = _cam.transform;
-            foreach (var it in _items)
-            {
-                Vector3 pos = ct.position + ct.right * it.Off.x + ct.up * it.Off.y + ct.forward * Depth;
-                it.Tr.position = pos;
-                it.Tr.rotation = Quaternion.LookRotation(pos - ct.position, ct.up); // face the user
-            }
+            if (_root != null && _root.parent == null) Attach();
         }
     }
 }

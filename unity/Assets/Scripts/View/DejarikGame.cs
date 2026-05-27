@@ -16,8 +16,8 @@ namespace Dejarik.View
     public class DejarikGame : MonoBehaviour
     {
         [SerializeField] float tableRadius = 0.6f;     // board play-radius in meters
-        [SerializeField] float reachForward = 0.5f;    // board distance in front of the head
-        [SerializeField] float reachDown = 0.35f;      // board drop below eye level (to hand reach)
+        [SerializeField] float reachForward = 0.85f;   // board distance in front of the head
+        [SerializeField] float reachDown = 0.2f;       // board drop below eye level
         const Player Human = Player.P0;
 
         // Combat timing (ms), mirroring src/game/timing.ts.
@@ -439,14 +439,15 @@ namespace Dejarik.View
                 }
         }
 
-        // Place the board in front of and below the head, at hand-reach height so you can pinch the cells.
+        // Place the board in front of and below the head. Rotate it so your (P0) side faces you: P0 pieces
+        // sit on the board's +Z, so local +Z must point back toward the camera (LookRotation(-fwd)).
         void Recenter()
         {
             var cam = Camera.main;
-            if (cam == null) { _board.Root.position = new Vector3(0f, -reachDown, reachForward); _board.Root.rotation = Quaternion.identity; return; }
+            if (cam == null) { _board.Root.position = new Vector3(0f, -reachDown, reachForward); _board.Root.rotation = Quaternion.Euler(0f, 180f, 0f); return; }
             Vector3 fwd = cam.transform.forward; fwd.y = 0f; fwd = fwd.sqrMagnitude < 1e-4f ? Vector3.forward : fwd.normalized;
             _board.Root.position = cam.transform.position + fwd * reachForward + Vector3.up * -reachDown;
-            _board.Root.rotation = Quaternion.identity;
+            _board.Root.rotation = Quaternion.LookRotation(-fwd, Vector3.up);
         }
     }
 }

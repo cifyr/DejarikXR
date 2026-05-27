@@ -121,7 +121,8 @@ namespace XrealAR.EditorTools
         {
             // glTF/* for runtime-loaded models; Standard for runtime-created primitives (hand joint
             // spheres, selection marker) — otherwise these shaders get stripped and render invisibly.
-            string[] names = { "glTF/PbrMetallicRoughness", "glTF/PbrSpecularGlossiness", "glTF/Unlit", "Standard", "Unlit/Color" };
+            string[] names = { "glTF/PbrMetallicRoughness", "glTF/PbrSpecularGlossiness", "glTF/Unlit", "Standard", "Unlit/Color",
+                               "TextMeshPro/Distance Field", "TextMeshPro/Mobile/Distance Field" };
             var so = new SerializedObject(GraphicsSettings.GetGraphicsSettings());
             var arr = so.FindProperty("m_AlwaysIncludedShaders");
             foreach (var name in names)

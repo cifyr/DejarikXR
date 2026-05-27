@@ -247,14 +247,18 @@ namespace Dejarik.View
                 for (int i = 0; i < 3; i++)
                     if (_btnRects[i].Contains(tapGui)) { Debug.Log($"[Dejarik] phone button {i}"); _btnActions[i]?.Invoke(); tap = false; break; }
 
-            // Board: reach + pinch the cell nearest your fingertip; gaze + tap only if no hand is tracked.
+            // Board selection by pointing: cast a ray from the eye THROUGH the fingertip onto the board, so
+            // whatever cell your finger visually overlaps is picked (robust to hand-tracking depth error).
+            // Pinch confirms. Falls back to head-gaze + tap when no hand is tracked.
             bool pinch = false; Vector3 tip = default;
             bool handTracked = _hand != null && _hand.TryGetTip(out tip, out pinch);
             bool confirm = pinch || tap;
-            if (handTracked)
+            var cam = Camera.main;
+            if (handTracked && cam != null)
             {
-                if (_board.NearestSpace(tip, maxDist, out var sp)) { _ptrSpace = sp; _input.SetReticle(_board.WorldPos(sp)); }
-                else _input.SetReticle(tip);
+                var ray = new Ray(cam.transform.position, tip - cam.transform.position);
+                if (_board.Raycast(ray, out var sp)) { _ptrSpace = sp; _input.SetReticle(_board.WorldPos(sp)); }
+                else { _board.NearestSpace(tip, maxDist, out _ptrSpace); _input.SetReticle(_ptrSpace >= 0 ? _board.WorldPos(_ptrSpace) : tip); }
             }
             else
             {

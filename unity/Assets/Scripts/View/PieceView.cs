@@ -106,7 +106,14 @@ namespace Dejarik.View
         public void FaceCenter() => _desiredYaw = YawToCenter(Space);
 
         public void PlayIdle() => PlayLoop(_c.Idle, 0.3f);
-        public void PlayVictory() => PlayLoop(string.IsNullOrEmpty(_c.Victory) ? _c.Idle : _c.Victory, 0.3f);
+        // Loop the victory clip; if the rig has none, an attack loop reads as an emphatic cheer (idle is last resort).
+        public void PlayVictory()
+        {
+            string clip = !string.IsNullOrEmpty(_c.Victory) ? _c.Victory
+                        : !string.IsNullOrEmpty(_c.Attack) ? _c.Attack
+                        : _c.Idle;
+            PlayLoop(clip, 0.3f);
+        }
 
         public void PlayAttack(bool finisher)
         {

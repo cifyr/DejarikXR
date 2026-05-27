@@ -31,7 +31,6 @@ namespace Dejarik.View
         GazeSelector _input;
         HandSelector _hand;
         WorldHud _world;
-        AnchorPlacementController _anchors;
 
         // Centralized per-frame pointer (computed in Update, consumed by the turn coroutines).
         int _ptrSpace = -1;
@@ -41,6 +40,15 @@ namespace Dejarik.View
         readonly Rect[] _btnRects = new Rect[3];
         Action[] _btnActions;
         GUIStyle _btnStyle, _titleStyle, _statusStyle, _diceStyle, _turnStyle, _panelStyle, _subStyle;
+
+        bool _celebrating;
+
+        // Hold-to-move: while the MOVE button is held, tilt the phone like a wand to push the board in x/y/z
+        // (mirrors XrealARApp's SceneManipulator). Sweep top right/left, tilt up/down, roll for closer/farther.
+        const float MoveSpeed = 0.4f;   // m/s at full deflection (slower than the room-scale original)
+        const float MoveDeadzone = 0.08f;
+        bool _moveHeldPrev;
+        Quaternion _moveRef;
 
 
         GameState _state;
@@ -59,7 +67,6 @@ namespace Dejarik.View
             _hand = gameObject.AddComponent<HandSelector>();
             _dice = gameObject.AddComponent<DiceView>();
             _audio = gameObject.AddComponent<GameAudio>();
-            _anchors = FindFirstObjectByType<AnchorPlacementController>();
 
             var rootGO = new GameObject("BoardRoot");
             rootGO.transform.SetParent(null);
@@ -68,7 +75,8 @@ namespace Dejarik.View
             _board.Build();
             _world = gameObject.AddComponent<WorldHud>();
             _world.Build(_board.Root);
-            _btnActions = new Action[] { Recenter, PinBoard, () => { _ = NewGame(); } };
+            _btnActions = new Action[] { Recenter, null, () => { _ = NewGame(); } }; // [1] MOVE is a hold, not a tap
+            if (AttitudeSensor.current != null) InputSystem.EnableDevice(AttitudeSensor.current);
             _audio.StartAmbient(_board.Root); // hologram-projector hum from the board
             Recenter();
 
@@ -77,6 +85,7 @@ namespace Dejarik.View
 
         async Task NewGame()
         {
+            _celebrating = false;
             foreach (var v in _views.Values) if (v) Destroy(v.gameObject);
             _views.Clear();
             _selectedId = null;
@@ -242,15 +251,21 @@ namespace Dejarik.View
             const float hoverRadius = 0.25f; // nearest cell within this is "hovered" (white square shown)
             const float pokeDist = 0.085f;   // push your fingertip this close to the hovered cell to select
 
-            // Phone tap: only the on-screen buttons.
-            bool tap = false; Vector2 tapGui = default;
+            // Phone buttons: RECENTER/NEW GAME are taps; MOVE (index 1) is a hold (handled below).
+            bool moveHeld = false;
             var ts = Touchscreen.current;
             if (ts != null)
                 foreach (var t in ts.touches)
-                    if (t.press.wasPressedThisFrame) { tap = true; var p = t.position.ReadValue(); tapGui = new Vector2(p.x, Screen.height - p.y); }
-            if (tap)
-                for (int i = 0; i < 3; i++)
-                    if (_btnRects[i].Contains(tapGui)) { Debug.Log($"[Dejarik] phone button {i}"); _btnActions[i]?.Invoke(); break; }
+                {
+                    if (!t.press.isPressed) continue;
+                    var p = t.position.ReadValue();
+                    var gui = new Vector2(p.x, Screen.height - p.y);
+                    if (_btnRects[1].Contains(gui)) moveHeld = true;
+                    if (t.press.wasPressedThisFrame)
+                        for (int i = 0; i < 3; i++)
+                            if (i != 1 && _btnRects[i].Contains(gui)) { Debug.Log($"[Dejarik] phone button {i}"); _btnActions[i]?.Invoke(); break; }
+                }
+            MoveBoard(moveHeld);
 
             // Board interaction: the cell nearest your fingertip is "hovered" and marked with a white square
             // so you can see (and correct) the target despite hand-tracking offset. Push your finger into it
@@ -338,11 +353,40 @@ namespace Dejarik.View
 
             ComputeButtonRects();
             GUI.Button(_btnRects[0], "RECENTER", _btnStyle);
-            GUI.Button(_btnRects[1], "PIN BOARD", _btnStyle);
+            GUI.Button(_btnRects[1], _moveHeldPrev ? "MOVING…\ntilt phone" : "MOVE\nhold + tilt", _btnStyle);
             GUI.Button(_btnRects[2], "NEW GAME", _btnStyle);
         }
 
-        void PinBoard() { if (_anchors != null) _ = _anchors.PinAsync(_board.Root, "dejarik-board"); }
+        // Hold-to-move: deflect the phone from where it pointed when you grabbed MOVE; that deflection drives
+        // the board in camera-relative x/y/z. Sweep top right/left -> right/left; tilt up/down -> up/down;
+        // roll screen-right/left -> closer/farther. (Ports XrealARApp's SceneManipulator MOVE gesture.)
+        void MoveBoard(bool held)
+        {
+            var cam = Camera.main;
+            if (held && cam != null && AttitudeSensor.current != null)
+            {
+                Quaternion att = AttitudeSensor.current.attitude.ReadValue();
+                if (!_moveHeldPrev) _moveRef = att;
+                Defl(_moveRef, att, out float r, out float u, out float roll);
+                Vector3 dir = Flat(cam.transform.right) * r + Vector3.up * u + Flat(cam.transform.forward) * (-roll);
+                _board.Root.position += dir * (MoveSpeed * Time.deltaTime);
+            }
+            _moveHeldPrev = held;
+        }
+
+        // Deflection of the phone from a reference orientation, expressed in the reference frame.
+        void Defl(Quaternion refAtt, Quaternion att, out float right, out float up, out float roll)
+        {
+            Quaternion d = Quaternion.Inverse(refAtt) * att;
+            Vector3 top = d * Vector3.up;        // device +Y (top edge)
+            Vector3 nrm = d * Vector3.forward;   // device +Z (screen normal)
+            right = Dz(top.x);
+            up = Dz(top.z);
+            roll = Dz(nrm.x);
+        }
+
+        float Dz(float v) => Mathf.Abs(v) < MoveDeadzone ? 0f : v;
+        static Vector3 Flat(Vector3 v) { v = Vector3.ProjectOnPlane(v, Vector3.up); return v.sqrMagnitude < 1e-4f ? Vector3.forward : v.normalized; }
 
         // ---- bot ----
 
@@ -411,11 +455,29 @@ namespace Dejarik.View
         IEnumerator DoVictory()
         {
             _board.ClearHighlights();
-            _hud = _state.Winner.HasValue ? $"Player {_state.Winner.Value.Num()} wins!" : "Draw.";
-            _audio.Victory(_board.WorldPos(Board.Center));
-            foreach (var v in _views.Values)
-                if (_state.Winner.HasValue && v.Owner == _state.Winner.Value) v.PlayVictory();
+            if (!_state.Winner.HasValue) { _hud = "Draw."; yield break; }
+            _hud = $"Player {_state.Winner.Value.Num()} wins!";
+            StartCoroutine(Celebrate(_state.Winner.Value));   // cheer forever until NEW GAME
             yield break;
+        }
+
+        // The winning team cheers continuously until the game is reset. Re-asserting PlayVictory is cheap
+        // (PlayLoop no-ops if already looping) and re-arms any clip that played once; the whoop repeats.
+        IEnumerator Celebrate(Player winner)
+        {
+            _celebrating = true;
+            float nextWhoop = 0f;
+            while (_celebrating)
+            {
+                foreach (var v in _views.Values)
+                    if (v && v.Owner == winner) v.PlayVictory();
+                if (Time.time >= nextWhoop)
+                {
+                    _audio.Victory(_board.WorldPos(Board.Center));
+                    nextWhoop = Time.time + 5f;
+                }
+                yield return new WaitForSeconds(1.5f);
+            }
         }
 
         // ---- animation of an applied transition ----

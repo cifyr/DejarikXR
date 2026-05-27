@@ -50,6 +50,17 @@ namespace Dejarik.View
 
         public static Material RimGlow() => Unlit(Color.Lerp(P0, Color.white, 0.25f));
 
+        // Transparent glowing marker for the bot's telegraph (uses the hologram shader for _Glow/_Alpha fade).
+        public static Material Marker(Color c)
+        {
+            var mat = new Material(Shader.Find("Dejarik/Hologram"));
+            mat.SetColor("_HoloColor", c);
+            mat.SetFloat("_RimPower", 1f);
+            mat.SetFloat("_Glow", 1.3f);
+            mat.SetFloat("_Alpha", 0.85f);
+            return mat;
+        }
+
         static Material Unlit(Color c)
         {
             var mat = new Material(Shader.Find("Unlit/Color"));

@@ -40,7 +40,7 @@ namespace Dejarik.View
         // Action buttons on the phone touchscreen (always reachable on the physical Beam).
         readonly Rect[] _btnRects = new Rect[3];
         Action[] _btnActions;
-        GUIStyle _btnStyle, _titleStyle, _statusStyle, _diceStyle, _turnStyle, _panelStyle;
+        GUIStyle _btnStyle, _titleStyle, _statusStyle, _diceStyle, _turnStyle, _panelStyle, _subStyle;
 
 
         GameState _state;
@@ -274,50 +274,68 @@ namespace Dejarik.View
             _board.SetRimColor(HoloMaterials.HoloFor(_state.Turn)); // rim shows whose turn it is
         }
 
-        // The control panel hugs the bottom of the phone; buttons sit in its lower portion.
-        void ComputeButtonRects()
+        // GUI-space rect that avoids the device safe area + the Beam's bottom navigation bar (its buttons get
+        // hidden behind the nav bar otherwise). Origin top-left to match IMGUI.
+        Rect SafeRectGui()
         {
-            float w = Screen.width, h = Screen.height, margin = w * 0.04f, gap = w * 0.025f;
-            float panelH = h * 0.26f, panelY = h - panelH;
-            float bh = panelH * 0.42f, by = panelY + panelH - bh - h * 0.03f;
-            float bw = (w - 2 * margin - 2 * gap) / 3f;
-            _btnRects[0] = new Rect(margin, by, bw, bh);
-            _btnRects[1] = new Rect(margin + bw + gap, by, bw, bh);
-            _btnRects[2] = new Rect(margin + 2 * (bw + gap), by, bw, bh);
+            var sa = Screen.safeArea; // pixels, origin bottom-left
+            float top = Mathf.Max(Screen.height - (sa.y + sa.height), Screen.height * 0.025f);
+            float bottom = Mathf.Max(sa.y, Screen.height * 0.07f); // reserve the nav bar
+            return new Rect(0f, top, Screen.width, Screen.height - top - bottom);
         }
 
-        // Holographic phone overlay: deep-space control bar with title, turn indicator, status/dice, and the
-        // three glowing action buttons. Matches the web app's vibe. Taps are hit-tested in Update.
+        // A row of three large buttons across the bottom of the safe area.
+        void ComputeButtonRects()
+        {
+            var sr = SafeRectGui();
+            float margin = sr.width * 0.05f, gap = sr.width * 0.03f;
+            float bw = (sr.width - 2 * margin - 2 * gap) / 3f, bh = sr.height * 0.15f;
+            float by = sr.yMax - bh - sr.height * 0.02f;
+            _btnRects[0] = new Rect(sr.x + margin, by, bw, bh);
+            _btnRects[1] = new Rect(sr.x + margin + bw + gap, by, bw, bh);
+            _btnRects[2] = new Rect(sr.x + margin + 2 * (bw + gap), by, bw, bh);
+        }
+
+        // Full-screen holographic control deck on the phone: deep-space background (covers the Beam trackpad
+        // surface), title, turn indicator, status/dice, and the three glowing action buttons. Taps are
+        // hit-tested in Update. Matches the web app's vibe.
         void OnGUI()
         {
             if (!_setupDone) return;
             float w = Screen.width, h = Screen.height;
-            int big = Mathf.RoundToInt(h * 0.030f), mid = Mathf.RoundToInt(h * 0.024f), small = Mathf.RoundToInt(h * 0.020f);
+            GUI.DrawTexture(new Rect(0, 0, w, h), HoloGui.BgTex, ScaleMode.StretchToFill);
+
+            int title = Mathf.RoundToInt(h * 0.052f), big = Mathf.RoundToInt(h * 0.030f);
+            int mid = Mathf.RoundToInt(h * 0.026f), small = Mathf.RoundToInt(h * 0.021f);
 
             _btnStyle ??= HoloGui.Button(mid);
-            _titleStyle ??= HoloGui.Label(big, HoloGui.Cyan, TextAnchor.MiddleLeft, FontStyle.Bold);
-            _turnStyle ??= HoloGui.Label(mid, HoloGui.Cyan, TextAnchor.MiddleRight, FontStyle.Bold);
-            _statusStyle ??= HoloGui.Label(small, HoloGui.Foreground, TextAnchor.MiddleCenter);
+            _titleStyle ??= HoloGui.Label(title, HoloGui.Cyan, TextAnchor.MiddleCenter, FontStyle.Bold);
+            _turnStyle ??= HoloGui.Label(big, HoloGui.Cyan, TextAnchor.MiddleCenter, FontStyle.Bold);
+            _statusStyle ??= HoloGui.Label(mid, HoloGui.Foreground, TextAnchor.MiddleCenter);
             _diceStyle ??= HoloGui.Label(small, HoloGui.Amber, TextAnchor.MiddleCenter, FontStyle.Bold);
+            _subStyle ??= HoloGui.Label(small, new Color(HoloGui.Cyan.r, HoloGui.Cyan.g, HoloGui.Cyan.b, 0.5f), TextAnchor.MiddleCenter);
             _panelStyle ??= HoloGui.Panel(0);
 
-            ComputeButtonRects();
-            float panelH = h * 0.26f, panelY = h - panelH, margin = w * 0.04f;
-            var panel = new Rect(0, panelY, w, panelH);
-            GUI.Box(panel, GUIContent.none, _panelStyle);
+            var sr = SafeRectGui();
+            GUI.Box(sr, GUIContent.none, _panelStyle);
 
-            float row = panelY + panelH * 0.06f, rowH = panelH * 0.18f;
-            GUI.Label(new Rect(margin, row, w * 0.5f, rowH), "DEJARIK", _titleStyle);
+            float rowH = sr.height * 0.10f, y = sr.y + sr.height * 0.035f;
+            HoloGui.GlowLabel(new Rect(sr.x, y, sr.width, rowH), "DEJARIK", _titleStyle, HoloGui.Cyan, 0.45f);
+            y += rowH * 0.95f;
+            GUI.Label(new Rect(sr.x, y, sr.width, rowH * 0.6f), "H O L O C H E S S", _subStyle);
+            y += rowH * 1.1f;
 
             bool yours = _state != null && _state.Turn == Human;
             _turnStyle.normal.textColor = yours ? HoloGui.Cyan : HoloGui.Amber;
-            GUI.Label(new Rect(w * 0.45f - margin, row, w * 0.55f, rowH), yours ? "● YOUR TURN" : "● OPPONENT", _turnStyle);
+            GUI.Label(new Rect(sr.x, y, sr.width, rowH), yours ? "● YOUR TURN" : "● OPPONENT'S TURN", _turnStyle);
+            y += rowH * 1.25f;
 
-            float statusY = row + rowH + panelH * 0.03f;
-            GUI.Label(new Rect(margin, statusY, w - 2 * margin, rowH), _hud ?? "", _statusStyle);
+            GUI.Label(new Rect(sr.x + sr.width * 0.06f, y, sr.width * 0.88f, rowH), _hud ?? "", _statusStyle);
+            y += rowH;
             if (!string.IsNullOrEmpty(_diceHud))
-                GUI.Label(new Rect(margin, statusY + rowH * 0.85f, w - 2 * margin, rowH), _diceHud, _diceStyle);
+                GUI.Label(new Rect(sr.x + sr.width * 0.06f, y, sr.width * 0.88f, rowH), _diceHud, _diceStyle);
 
+            ComputeButtonRects();
             GUI.Button(_btnRects[0], "RECENTER", _btnStyle);
             GUI.Button(_btnRects[1], "PIN BOARD", _btnStyle);
             GUI.Button(_btnRects[2], "NEW GAME", _btnStyle);
@@ -327,25 +345,61 @@ namespace Dejarik.View
 
         // ---- bot ----
 
+        // The bot's turn, telegraphed step-by-step so it's easy to follow: (a) light every square the chosen
+        // piece could act on, (b) jitter out the squares it did NOT pick, leaving only the chosen one pulsing,
+        // (c) hold a beat on that square, then (d) commit and animate the move/attack.
         IEnumerator BotTurn()
         {
             _hud = "Opponent is thinking...";
             var action = Bot.Action(_state, _rng);
-            // Telegraph: light the chosen piece's options briefly.
-            if (action != null)
+            if (action == null)
             {
-                string pid = action.Type == BotAction.Kind.Move ? action.PieceId : action.AttackerId;
-                var moves = Engine.LegalMoves(_state, pid);
-                var atk = Engine.AttackTargets(_state, pid).Select(id => Engine.GetPiece(_state, id).Space).ToList();
-                _board.SetHighlights(moves, atk, null, Engine.GetPiece(_state, pid).Space);
+                yield return new WaitForSeconds(BOT_PONDER / 1000f);
+                _state = Engine.PassAction(_state);
+                yield return PlayFx(_state);
+                SyncViews();
+                yield break;
             }
-            yield return new WaitForSeconds(BOT_PONDER / 1000f);
+
+            string pid = action.Type == BotAction.Kind.Move ? action.PieceId : action.AttackerId;
+            int pieceSpace = Engine.GetPiece(_state, pid).Space;
+            var moves = Engine.LegalMoves(_state, pid);
+            var atkSpaces = Engine.AttackTargets(_state, pid).Select(id => Engine.GetPiece(_state, id).Space).ToList();
+            bool chosenIsAttack = action.Type == BotAction.Kind.Attack;
+            int chosenSpace = chosenIsAttack ? Engine.GetPiece(_state, action.DefenderId).Space : action.Dest;
+
+            // (a) show all options.
+            _hud = "Opponent is choosing...";
+            _board.SetHighlights(moves, atkSpaces, null, pieceSpace);
+            var markers = new List<TelegraphMarker>();
+            Color moveCol = Color.Lerp(HoloMaterials.P1, Color.white, 0.25f);
+            Color atkCol = HoloMaterials.Hex("#ff4040");
+            foreach (var sp in moves)
+            {
+                bool c = !chosenIsAttack && sp == chosenSpace;
+                markers.Add(_board.SpawnMarker(sp, c ? Color.white : moveCol, c));
+            }
+            foreach (var sp in atkSpaces)
+            {
+                bool c = chosenIsAttack && sp == chosenSpace;
+                markers.Add(_board.SpawnMarker(sp, c ? Color.white : atkCol, c));
+            }
+            yield return new WaitForSeconds(0.95f);
+
+            // (b) jitter out the rejected squares; narrow the cell highlight to just the choice.
+            string keep = $"telegraph_{chosenSpace}";
+            foreach (var m in markers)
+                if (m != null && m.name != keep) StartCoroutine(m.JitterOut(0.5f));
+            if (chosenIsAttack) _board.SetHighlights(null, new List<int> { chosenSpace }, null, pieceSpace);
+            else _board.SetHighlights(new List<int> { chosenSpace }, null, null, pieceSpace);
+            yield return new WaitForSeconds(0.8f);
+
+            // (c) clean up, then (d) commit + animate.
+            foreach (var m in markers) if (m != null) Destroy(m.gameObject);
             _board.ClearHighlights();
 
-            if (action == null) _state = Engine.PassAction(_state);
-            else if (action.Type == BotAction.Kind.Attack) _state = Engine.ApplyAttack(_state, action.AttackerId, action.DefenderId, _rng);
+            if (chosenIsAttack) _state = Engine.ApplyAttack(_state, action.AttackerId, action.DefenderId, _rng);
             else _state = Engine.ApplyMove(_state, action.PieceId, action.Dest);
-
             yield return PlayFx(_state);
             SyncViews();
         }

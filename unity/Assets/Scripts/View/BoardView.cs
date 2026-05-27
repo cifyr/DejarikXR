@@ -78,6 +78,25 @@ namespace Dejarik.View
 
         public void ClearHighlights() => SetHighlights(null, null, null, -1);
 
+        // A flat glow tile floating just above a cell, for the bot's telegraph. Lies in the board plane (+Y up).
+        public TelegraphMarker SpawnMarker(int space, Color color, bool chosen)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            var col = go.GetComponent<Collider>();
+            if (col) Destroy(col);
+            go.name = $"telegraph_{space}";
+            go.transform.SetParent(transform, false);
+            var p = BoardLayout.Pos3D(space);
+            go.transform.localPosition = new Vector3(p.x, BoardLayout.BaseTop + 0.05f, p.z);
+            go.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            float s = space == Board.Center ? 0.8f : 1.1f;
+            go.transform.localScale = new Vector3(s, s, s);
+            go.GetComponent<MeshRenderer>().material = HoloMaterials.Marker(color);
+            var m = go.AddComponent<TelegraphMarker>();
+            m.Init(chosen);
+            return m;
+        }
+
         // Gaze/controller ray -> board space, or -1 if the ray misses the board.
         public bool Raycast(Ray ray, out int space)
         {

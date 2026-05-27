@@ -12,30 +12,37 @@ namespace Dejarik.View
         public static readonly Color Amber = HoloMaterials.Hex("#ff8a3c");
         public static readonly Color Foreground = HoloMaterials.Hex("#d6f3ff");
 
-        static Font _mono;
-        static Texture2D _panelTex, _btnTex, _btnHoverTex, _dividerTex;
+        static Texture2D _panelTex, _btnTex, _btnHoverTex, _dividerTex, _bgTex;
         static bool _built;
 
-        public static Font Mono
-        {
-            get
-            {
-                if (_mono == null)
-                    _mono = Font.CreateDynamicFontFromOSFont(new[] { "monospace", "Courier New", "Menlo" }, 16);
-                return _mono;
-            }
-        }
+        // The OS-monospace font returns no glyphs on the Beam (buttons render as blank squares), so we leave
+        // GUIStyle.font null and let Unity's reliable built-in font draw the text.
+        public static Font Mono => null;
 
         public static void EnsureBuilt()
         {
             if (_built) return;
             _built = true;
-            // Translucent dark space panel with a faint cyan top edge (9-sliced).
-            _panelTex = Bordered(new Color(0.04f, 0.086f, 0.149f, 0.82f), new Color(Cyan.r, Cyan.g, Cyan.b, 0.35f));
+            // Translucent dark space panel with a faint cyan edge (9-sliced).
+            _panelTex = Bordered(new Color(0.04f, 0.086f, 0.149f, 0.55f), new Color(Cyan.r, Cyan.g, Cyan.b, 0.5f));
             _btnTex = Bordered(new Color(Cyan.r, Cyan.g, Cyan.b, 0.12f), new Color(Cyan.r, Cyan.g, Cyan.b, 0.6f));
             _btnHoverTex = Bordered(new Color(Cyan.r, Cyan.g, Cyan.b, 0.28f), new Color(Cyan.r, Cyan.g, Cyan.b, 0.95f));
             _dividerTex = Solid(new Color(Cyan.r, Cyan.g, Cyan.b, 0.25f));
+            _bgTex = VerticalGradient(HoloMaterials.Hex("#081628"), HoloMaterials.Hex("#03060d")); // deep space
         }
+
+        // Opaque top->bottom gradient for the full-screen deck background.
+        static Texture2D VerticalGradient(Color top, Color bottom)
+        {
+            const int h = 128;
+            var t = new Texture2D(1, h, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            for (int y = 0; y < h; y++)
+                t.SetPixel(0, y, Color.Lerp(bottom, top, y / (float)(h - 1)));
+            t.Apply();
+            return t;
+        }
+
+        public static Texture2D BgTex { get { EnsureBuilt(); return _bgTex; } }
 
         // 9-slice texture: 2px glowing border over a translucent fill.
         static Texture2D Bordered(Color fill, Color border)

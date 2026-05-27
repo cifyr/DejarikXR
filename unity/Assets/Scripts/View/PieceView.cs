@@ -45,22 +45,40 @@ namespace Dejarik.View
             StartCoroutine(Ground());
         }
 
-        // Some rigs' lowest point in the idle pose isn't the feet, so the bind-pose normalization leaves
-        // them floating. Once idle settles, drop the creature so its lowest point sits on the cell plane.
+        // CreatureFactory grounds the bind pose, but the idle animation can momentarily lift the feet, so a
+        // single-frame sample can read a low-reaching limb and shove the whole creature UP (the float bug).
+        // Instead, sample the LOWEST the creature reaches over ~1s and drop it so that point rests on the
+        // cell plane. Clamp to downward-only so a transient low frame can never lift a planted creature.
         IEnumerator Ground()
         {
-            yield return new WaitForSeconds(0.4f);
             if (_c == null) yield break;
             var rs = _c.Holder.GetComponentsInChildren<Renderer>();
             if (rs.Length == 0) yield break;
-            var b = rs[0].bounds;
-            for (int i = 1; i < rs.Length; i++) b.Encapsulate(rs[i].bounds);
-            float worldDy = transform.position.y - b.min.y; // target = the PieceView origin (cell plane)
+            float planeY = transform.position.y;   // where the feet should rest (PieceView origin = cell top)
+            float lowest = float.MaxValue;
+            float t0 = Time.time;
+            while (Time.time - t0 < 1.0f)
+            {
+                var b = rs[0].bounds;
+                for (int i = 1; i < rs.Length; i++) b.Encapsulate(rs[i].bounds);
+                lowest = Mathf.Min(lowest, b.min.y);
+                yield return null;
+            }
             float scaleY = _inner.lossyScale.y;
             if (Mathf.Abs(scaleY) < 1e-5f) yield break;
+            float offsetWorld = Mathf.Min(0f, planeY - lowest); // floaters drop; planted/sunk are left alone
+            if (offsetWorld > -1e-4f) yield break;
             var lp = _c.Holder.transform.localPosition;
-            lp.y += worldDy / scaleY;
-            _c.Holder.transform.localPosition = lp;
+            float endY = lp.y + offsetWorld / scaleY;
+            float lt = 0f;
+            while (lt < 0.25f) // ease down to avoid a pop
+            {
+                lt += Time.deltaTime;
+                lp = _c.Holder.transform.localPosition;
+                lp.y = Mathf.Lerp(lp.y, endY, lt / 0.25f);
+                _c.Holder.transform.localPosition = lp;
+                yield return null;
+            }
         }
 
         public void SnapTo(int space)

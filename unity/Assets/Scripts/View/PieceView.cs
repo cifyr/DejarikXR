@@ -177,7 +177,7 @@ namespace Dejarik.View
                     if (_path.Count == 0)
                     {
                         IsWalking = false;
-                        _desiredYaw = YawToCenter(Space);
+                        // Keep facing the direction it walked (only the initial placement faces center).
                         PlayLoop(_c.Idle, 0.25f);
                     }
                 }
@@ -207,8 +207,13 @@ namespace Dejarik.View
         void LockRoot()
         {
             if (_c.RootBone == null) return;
+            // The root's baked translation this frame; remove it from the root AND its siblings (e.g. a held
+            // staff bound to its own top-level bone) so the staff stays with the body instead of bobbing.
+            Vector3 delta = _c.RootBone.localPosition - _c.RootBaseLocalPos;
             _c.RootBone.localPosition = _c.RootBaseLocalPos;
             _c.RootBone.localRotation = _c.RootBaseLocalRot;
+            for (int i = 0; i < _c.SiblingBones.Count; i++)
+                if (_c.SiblingBones[i]) _c.SiblingBones[i].localPosition -= delta;
         }
 
         void PlayLoop(string clip, float fade)

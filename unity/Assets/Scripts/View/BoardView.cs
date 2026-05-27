@@ -93,13 +93,13 @@ namespace Dejarik.View
             Color lit = mat.color;
             Color dim = HoloMaterials.CellColor(baseRole);
             Color off = Color.Lerp(dim, Color.black, 0.6f);
-            const float dur = 0.5f;
+            const float dur = 0.22f;
             float t0 = Time.time;
             while (Time.time - t0 < dur)
             {
                 float t = (Time.time - t0) / dur;          // chance of being "off" rises as it dies out
                 mat.color = UnityEngine.Random.value < t ? off : lit;
-                yield return new WaitForSeconds(UnityEngine.Random.Range(0.025f, 0.06f));
+                yield return new WaitForSeconds(UnityEngine.Random.Range(0.012f, 0.03f));
             }
             mat.color = dim;
         }

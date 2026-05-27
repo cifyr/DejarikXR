@@ -21,6 +21,10 @@ namespace Dejarik.View
         public Transform RootBone;           // animated root bone to lock (name ends ROOTSHJnt), may be null
         public Vector3 RootBaseLocalPos;
         public Quaternion RootBaseLocalRot;
+        // Bones that share the root's parent (e.g. a held staff/HammerJnt) and carry the same baked root
+        // translation. They must shed the same delta as the root or they drift relative to the body.
+        public List<Transform> SiblingBones = new List<Transform>();
+        public List<Vector3> SiblingBaseLocalPos = new List<Vector3>();
 
         static readonly Regex IdleRe = new Regex("idle", RegexOptions.IgnoreCase);
         static readonly Regex WalkRe = new Regex("walk", RegexOptions.IgnoreCase);
@@ -111,6 +115,15 @@ namespace Dejarik.View
             {
                 inst.RootBaseLocalPos = inst.RootBone.localPosition;
                 inst.RootBaseLocalRot = inst.RootBone.localRotation;
+                // Capture the root's sibling bones (same parent) so they can shed the same root-motion delta.
+                var rootParent = inst.RootBone.parent;
+                if (rootParent != null)
+                    foreach (Transform sib in rootParent)
+                        if (sib != inst.RootBone)
+                        {
+                            inst.SiblingBones.Add(sib);
+                            inst.SiblingBaseLocalPos.Add(sib.localPosition);
+                        }
             }
 
             // Now (after normalization) place it under the scaled board root.

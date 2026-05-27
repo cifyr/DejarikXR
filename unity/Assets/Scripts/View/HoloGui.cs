@@ -110,6 +110,7 @@ namespace Dejarik.View
                 fontSize = fontSize,
                 fontStyle = fs,
                 wordWrap = true,
+                richText = true,   // allow <color> tags (dice line color-codes each team)
             };
         }
 

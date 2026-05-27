@@ -15,6 +15,7 @@ namespace Dejarik.View
         public static Color Hex(string s) => ColorUtility.TryParseHtmlString(s, out var c) ? c : Color.magenta;
 
         public static Color HoloFor(Player owner) => owner == Player.P0 ? P0 : P1;
+        public static string HexStr(Player owner) => owner == Player.P0 ? "#38e1ff" : "#ff8a3c"; // for rich-text tags
 
         // Tinted emissive hologram for a creature mesh. Keeps the source diffuse/normal maps, tints albedo
         // toward white, and uses the diffuse as the emission map glowing in the player's holo color.

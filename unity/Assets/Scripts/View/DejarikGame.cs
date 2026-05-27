@@ -421,7 +421,7 @@ namespace Dejarik.View
             // (b) glitch out the squares it did NOT pick; the chosen square stays lit.
             var rejected = moves.Concat(atkSpaces).Where(sp => sp != chosenSpace).Distinct().ToList();
             _board.GlitchOutCells(rejected);
-            yield return new WaitForSeconds(0.7f);
+            yield return new WaitForSeconds(0.4f);
 
             // (c) hold a beat on the lone chosen square, then (d) commit + animate the move/attack.
             yield return new WaitForSeconds(0.45f);
@@ -511,7 +511,9 @@ namespace Dejarik.View
             PieceView atkView = attackerId != null && _views.TryGetValue(attackerId, out var av) ? av : null;
 
             int atkTotal = combat.AttackDice.Sum(), defTotal = combat.DefenseDice.Sum();
-            _diceHud = $"{Pieces.Stats[combat.AttackerType.Value].Name}  {atkTotal}    vs    {defTotal}  {Pieces.Stats[combat.DefenderType.Value].Name}";
+            // Color each side's name+total like its dice (cyan = you/P0, amber = opponent) so it's clear which is which.
+            string ac = HoloMaterials.HexStr(combat.AttackerOwner.Value), dc = HoloMaterials.HexStr(combat.AttackerOwner.Value.Other());
+            _diceHud = $"<color={ac}>{Pieces.Stats[combat.AttackerType.Value].Name} {atkTotal}</color>    vs    <color={dc}>{defTotal} {Pieces.Stats[combat.DefenderType.Value].Name}</color>";
             Vector3 center = _board.WorldPos(Board.Center);
             _dice.ShowRoll(atkTotal, defTotal, combat.AttackDice.Length, combat.DefenseDice.Length, combat.AttackerOwner.Value, center);
             _audio.Dice(center);

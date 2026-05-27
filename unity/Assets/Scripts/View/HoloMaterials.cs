@@ -40,15 +40,16 @@ namespace Dejarik.View
         // cell read as black on-device). Brightness differences make the grid pattern readable.
         public static Material Cell(CellRole role)
         {
+            // Dim blue base grid so the vivid move (cyan) / attack (orange) / push (purple) highlights pop.
             Color c = role switch
             {
-                CellRole.Move     => P0,
+                CellRole.Move     => Color.Lerp(P0, Color.white, 0.15f),
                 CellRole.Attack   => P1,
                 CellRole.Push     => Hex("#c08cff"),
-                CellRole.Selected => Color.Lerp(P0, Color.white, 0.2f),
-                CellRole.Center   => Hex("#3a8fcf"),
-                CellRole.Light    => Hex("#2c79ad"),
-                _                 => Hex("#1d567f"),
+                CellRole.Selected => Color.Lerp(P0, Color.white, 0.35f),
+                CellRole.Center   => Hex("#1f5176"),
+                CellRole.Light    => Hex("#1b4663"),
+                _                 => Hex("#143247"),
             };
             return Unlit(c);
         }

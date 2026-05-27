@@ -50,7 +50,7 @@ namespace XrealAR.EditorTools
             cam.backgroundColor = new Color(0.10f, 0.10f, 0.13f, 1f); // dark gray, not pure black, to spot a black plane
             cam.nearClipPlane = 0.01f;
             cam.fieldOfView = 45f;
-            go.transform.position = target + new Vector3(0.15f, 0.5f, -0.55f);
+            go.transform.position = target + new Vector3(0.0f, 0.62f, -0.62f); // 3/4 view framing whole board + pieces
             go.transform.LookAt(target);
 
             int w = 1280, h = 960;

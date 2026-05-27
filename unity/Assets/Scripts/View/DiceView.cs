@@ -5,105 +5,98 @@ using Dejarik;
 
 namespace Dejarik.View
 {
-    // Lightweight holographic dice: emissive cubes tumble above the board while the roll "settles", with
-    // floating roll totals in each side's color, then fade. Cosmetic; the outcome is read from the engine.
+    // Physical holographic dice: cubes drop onto the board and clatter/bounce to a rest, colored by side
+    // (attacker vs defender). The numeric totals are shown on the HUD by DejarikGame. Lives at world scale
+    // (not under the tiny board root) so the rigidbody physics stays stable.
     public class DiceView : MonoBehaviour
     {
-        const float RollMs = 1300f, HoldMs = 950f;
-
         readonly List<GameObject> _spawned = new List<GameObject>();
+        readonly List<GameObject> _rig = new List<GameObject>();
         Coroutine _running;
+        PhysicsMaterial _bounce;
 
-        public void ShowRoll(int atkTotal, int defTotal, int atkCount, int defCount, Player attacker, Vector3 worldCenter)
+        public void ShowRoll(int atkTotal, int defTotal, int atkCount, int defCount, Player attacker, Vector3 boardCenter)
         {
             if (_running != null) StopCoroutine(_running);
-            Clear();
-            _running = StartCoroutine(Run(atkTotal, defTotal, atkCount, defCount, attacker, worldCenter));
+            ClearDice();
+            _running = StartCoroutine(Run(atkCount, defCount, attacker, boardCenter));
         }
 
-        IEnumerator Run(int atkTotal, int defTotal, int atkCount, int defCount, Player attacker, Vector3 center)
+        IEnumerator Run(int atkCount, int defCount, Player attacker, Vector3 center)
         {
-            var atkColor = HoloMaterials.HoloFor(attacker);
-            var defColor = HoloMaterials.HoloFor(attacker.Other());
-            float up = 0.18f;
-
-            var cubes = new List<Transform>();
-            void SpawnCubes(int n, Color c, float side)
+            EnsureRig(center);
+            float die = 0.022f;
+            void Spawn(int n, Color col)
             {
-                for (int i = 0; i < n; i++)
+                for (int i = 0; i < n && i < 10; i++)
                 {
                     var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    go.transform.SetParent(transform, false);
-                    go.transform.localScale = Vector3.one * 0.02f;
-                    go.transform.position = center + new Vector3(side * 0.06f + (i - n * 0.5f) * 0.012f, up, 0f);
-                    Destroy(go.GetComponent<Collider>());
+                    go.transform.SetParent(transform, true);
+                    go.transform.localScale = Vector3.one * die;
+                    Vector2 off = Random.insideUnitCircle * 0.04f;
+                    go.transform.position = center + new Vector3(off.x, 0.22f + i * 0.01f, off.y);
+                    go.transform.rotation = Random.rotation;
                     var mr = go.GetComponent<MeshRenderer>();
-                    var m = new Material(Shader.Find("Standard"));
-                    m.color = Color.Lerp(c, Color.white, 0.4f);
-                    m.EnableKeyword("_EMISSION");
-                    m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
-                    m.SetColor("_EmissionColor", c * 1.2f);
+                    var m = new Material(Shader.Find("Unlit/Color")) { color = Color.Lerp(col, Color.white, 0.25f) };
                     mr.material = m;
-                    cubes.Add(go.transform);
+                    var bc = go.GetComponent<BoxCollider>();
+                    bc.material = _bounce;
+                    var rb = go.AddComponent<Rigidbody>();
+                    rb.mass = 0.02f;
+                    rb.linearVelocity = new Vector3(Random.Range(-0.1f, 0.1f), -0.2f, Random.Range(-0.1f, 0.1f));
+                    rb.angularVelocity = Random.insideUnitSphere * 12f;
                     _spawned.Add(go);
                 }
             }
-            SpawnCubes(atkCount, atkColor, -1f);
-            SpawnCubes(defCount, defColor, 1f);
+            Spawn(atkCount, HoloMaterials.HoloFor(attacker));
+            Spawn(defCount, HoloMaterials.HoloFor(attacker.Other()));
 
-            var atkLabel = MakeLabel(atkTotal.ToString(), atkColor, center + new Vector3(-0.06f, up + 0.05f, 0f));
-            var defLabel = MakeLabel(defTotal.ToString(), defColor, center + new Vector3(0.06f, up + 0.05f, 0f));
+            yield return new WaitForSeconds(2.3f);      // tumble + settle
+            yield return new WaitForSeconds(0.95f);      // hold settled
 
+            // shrink out
             float t0 = Time.time;
-            while ((Time.time - t0) * 1000f < RollMs)
+            while (Time.time - t0 < 0.3f)
             {
-                foreach (var c in cubes)
-                    if (c) c.Rotate(new Vector3(360f, 540f, 270f) * Time.deltaTime, Space.Self);
+                float k = 1f - (Time.time - t0) / 0.3f;
+                foreach (var go in _spawned) if (go) go.transform.localScale = Vector3.one * (die * k);
                 yield return null;
             }
-            yield return new WaitForSeconds(HoldMs / 1000f);
-
-            float f0 = Time.time;
-            while ((Time.time - f0) < 0.3f)
-            {
-                float a = 1f - (Time.time - f0) / 0.3f;
-                foreach (var go in _spawned)
-                    if (go) { var mr = go.GetComponent<MeshRenderer>(); if (mr) { var col = mr.material.color; col.a = a; } }
-                yield return null;
-            }
-            Clear();
+            ClearDice();
         }
 
-        GameObject MakeLabel(string text, Color color, Vector3 pos)
+        // Floor + low containing walls at the board plane so dice land and clatter without rolling off.
+        void EnsureRig(Vector3 center)
         {
-            try
+            if (_bounce == null)
+                _bounce = new PhysicsMaterial { bounciness = 0.4f, dynamicFriction = 0.4f, staticFriction = 0.4f,
+                    bounceCombine = PhysicsMaterialCombine.Maximum };
+            foreach (var g in _rig) if (g) Destroy(g);
+            _rig.Clear();
+
+            var floor = new GameObject("diceFloor");
+            floor.transform.SetParent(transform, true);
+            floor.transform.position = center - new Vector3(0f, 0.02f, 0f);
+            var fb = floor.AddComponent<BoxCollider>();
+            fb.size = new Vector3(0.6f, 0.04f, 0.6f);
+            fb.material = _bounce;
+            _rig.Add(floor);
+
+            for (int i = 0; i < 8; i++)
             {
-                var go = new GameObject("dieTotal");
-                go.transform.SetParent(transform, false);
-                go.transform.position = pos;
-                var tmp = go.AddComponent<TMPro.TextMeshPro>();
-                tmp.text = text;
-                tmp.fontSize = 2.2f;
-                tmp.color = color;
-                tmp.alignment = TMPro.TextAlignmentOptions.Center;
-                go.transform.localScale = Vector3.one * 0.05f;
-                _spawned.Add(go);
-                return go;
+                float a = i / 8f * Mathf.PI * 2f;
+                var wall = new GameObject($"diceWall{i}");
+                wall.transform.SetParent(transform, true);
+                wall.transform.position = center + new Vector3(Mathf.Cos(a) * 0.26f, 0.05f, Mathf.Sin(a) * 0.26f);
+                wall.transform.rotation = Quaternion.Euler(0f, -a * Mathf.Rad2Deg, 0f);
+                var wb = wall.AddComponent<BoxCollider>();
+                wb.size = new Vector3(0.22f, 0.12f, 0.02f);
+                wb.material = _bounce;
+                _rig.Add(wall);
             }
-            catch { return null; }
         }
 
-        void Update()
-        {
-            // Billboard labels toward the camera.
-            var cam = Camera.main;
-            if (cam == null) return;
-            foreach (var go in _spawned)
-                if (go != null && go.GetComponent<TMPro.TextMeshPro>() != null)
-                    go.transform.rotation = Quaternion.LookRotation(go.transform.position - cam.transform.position);
-        }
-
-        void Clear()
+        void ClearDice()
         {
             foreach (var go in _spawned) if (go) Destroy(go);
             _spawned.Clear();

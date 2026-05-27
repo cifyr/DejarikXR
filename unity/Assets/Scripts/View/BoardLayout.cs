@@ -18,7 +18,7 @@ namespace Dejarik.View
         public const float CellHalf = 14f * Mathf.Deg2Rad;
         public const float BaseTop = 0.15f;
         public const float PieceY = 0.155f;
-        public const float PieceScale = 0.9f;   // standing piece height in board units
+        public const float PieceScale = 1.35f;   // standing piece height in board units
 
         // Board-local position of a space (on the play plane), matching pos3D() in the web game.
         public static Vector3 Pos3D(int space)

@@ -33,6 +33,8 @@ namespace Dejarik.View
         readonly Dictionary<string, PieceView> _views = new Dictionary<string, PieceView>();
 
         string _selectedId;
+        string _statsPieceId;   // piece whose stats the HUD shows (yours or the opponent's)
+        string _diceHud;        // combat roll totals shown during a fight
         bool _setupDone;
         string _hud = "";
 
@@ -139,6 +141,8 @@ namespace Dejarik.View
         bool TryHumanClick(int sp)
         {
             var piece = Engine.PieceAt(_state, sp);
+            if (piece != null) _statsPieceId = piece.Id;   // any piece you pinch shows its stats on the HUD
+
             if (_selectedId == null)
             {
                 if (piece != null && piece.Owner == Human) { Select(piece.Id); }
@@ -199,27 +203,23 @@ namespace Dejarik.View
             _board.SetHighlights(moves, atkSpaces, null, selSpace);
         }
 
-        // Unified selection: prefer the tracked hand (point near a cell, pinch to tap); otherwise fall back
-        // to head-gaze + a touchscreen tap. `space` is the pointed board space (or -1), `confirm` the tap.
+        // Hand-only selection: the pointer is your index fingertip; you select the cell/piece nearest your
+        // fingertip by pinching it. No head-gaze. (Beam tap also confirms the hand-pointed cell as a backup.)
         void UpdateGaze(out int space, out bool hit, out bool confirm)
         {
-            const float maxDist = 0.08f; // fingertip within ~8cm of a cell center selects it
-
-            // Hand pointer (only when the fingertip is actually near the board).
-            bool handHit = false; int handSpace = -1; bool pinch = false; Vector3 tip = default;
-            if (_hand != null && _hand.TryGetTip(out tip, out pinch))
-                handHit = _board.NearestSpace(tip, maxDist, out handSpace);
-
-            // Gaze pointer (always available).
-            bool gazeHit = _board.Raycast(_input.CurrentRay, out int gazeSpace);
-
-            // Prefer the hand when it's on the board, else fall back to gaze. Confirm = pinch OR Beam tap.
-            if (handHit) { space = handSpace; hit = true; _input.SetReticle(_board.WorldPos(space)); }
-            else if (gazeHit) { space = gazeSpace; hit = true; _input.SetReticle(_board.WorldPos(space)); }
-            else { space = -1; hit = false; _input.SetReticle(_hand != null && _hand.TryGetTip(out var t2, out _) ? t2 : (Vector3?)null); }
-
-            confirm = pinch || _input.ConfirmDown;
-            if (confirm) Debug.Log($"[Dejarik] confirm -> space={space} hit={hit} (pinch={pinch})");
+            const float maxDist = 0.09f; // fingertip within ~9cm of a cell center points at it
+            space = -1; hit = false; confirm = false;
+            if (_hand != null && _hand.TryGetTip(out var tip, out bool pinch))
+            {
+                hit = _board.NearestSpace(tip, maxDist, out space);
+                _input.SetReticle(hit ? _board.WorldPos(space) : tip);
+                confirm = (pinch || _input.ConfirmDown) && hit;
+                if (confirm) Debug.Log($"[Dejarik] pinch -> space={space}");
+            }
+            else
+            {
+                _input.SetReticle(null);
+            }
         }
 
         // ---- bot ----
@@ -306,14 +306,20 @@ namespace Dejarik.View
             string attackerId = atkFx?.PieceId;
             PieceView atkView = attackerId != null && _views.TryGetValue(attackerId, out var av) ? av : null;
 
-            Vector3 center = _board.WorldPos(Board.Center) + Vector3.up * 0.12f;
-            _dice.ShowRoll(combat.AttackDice.Sum(), combat.DefenseDice.Sum(),
-                combat.AttackDice.Length, combat.DefenseDice.Length, combat.AttackerOwner.Value, center);
+            int atkTotal = combat.AttackDice.Sum(), defTotal = combat.DefenseDice.Sum();
+            _diceHud = $"{Pieces.Stats[combat.AttackerType.Value].Name}  {atkTotal}    vs    {defTotal}  {Pieces.Stats[combat.DefenderType.Value].Name}";
+            Vector3 center = _board.WorldPos(Board.Center);
+            _dice.ShowRoll(atkTotal, defTotal, combat.AttackDice.Length, combat.DefenseDice.Length, combat.AttackerOwner.Value, center);
             _audio.PlayDice();
 
             yield return new WaitForSeconds(COMBAT_LEAD / 1000f);
-            if (atkView != null && atkFx.Facing.HasValue) atkView.FaceSpace(atkFx.Facing.Value);
-            if (hit != null && _views.TryGetValue(hit.PieceId, out var hv) && hit.Facing.HasValue) hv.FaceSpace(hit.Facing.Value);
+            // Square off: both combatants turn to face each other before the strike ("look before fighting").
+            if (atkView != null && atkFx.Facing.HasValue)
+            {
+                atkView.FaceSpace(atkFx.Facing.Value);
+                var defView = FindViewAtSpace(atkFx.Facing.Value);
+                if (defView != null) defView.FaceSpace(atkView.Space);
+            }
 
             yield return new WaitForSeconds((STRIKE_AT - COMBAT_LEAD) / 1000f);
             if (atkView != null) atkView.PlayAttack(combat.Outcome == Outcome.Kill);
@@ -340,6 +346,13 @@ namespace Dejarik.View
                 hv2.PlayHit();
 
             yield return new WaitForSeconds((DEATH_REMOVE - REACT_AT) / 1000f + 0.2f);
+            _diceHud = null;
+        }
+
+        PieceView FindViewAtSpace(int space)
+        {
+            foreach (var v in _views.Values) if (v != null && v.Space == space) return v;
+            return null;
         }
 
         // Reconcile views with state: snap spaces and remove any pieces that left without a death anim.
@@ -384,6 +397,35 @@ namespace Dejarik.View
             };
             style.normal.textColor = Color.white;
             GUI.Label(new Rect(margin, h * 0.05f, w - 2 * margin, h * 0.08f), _hud, style);
+
+            // Dice roll totals during combat.
+            if (!string.IsNullOrEmpty(_diceHud))
+            {
+                var dstyle = new GUIStyle(GUI.skin.label)
+                {
+                    fontSize = Mathf.RoundToInt(h * 0.034f), alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold,
+                };
+                dstyle.normal.textColor = Color.white;
+                GUI.Label(new Rect(margin, h * 0.14f, w - 2 * margin, h * 0.07f), _diceHud, dstyle);
+            }
+
+            // Selected-piece stats panel (yours or the opponent's).
+            var sp = _statsPieceId != null ? Engine.GetPiece(_state, _statsPieceId) : null;
+            if (sp != null)
+            {
+                var st = Pieces.Stats[sp.Type];
+                var c = HoloMaterials.HoloFor(sp.Owner);
+                var box = new Rect(margin, h * 0.24f, w * 0.46f, h * 0.20f);
+                var bg = new GUIStyle(GUI.skin.box);
+                GUI.color = new Color(c.r, c.g, c.b, 0.85f);
+                GUI.Box(box, GUIContent.none);
+                GUI.color = Color.white;
+                var ps = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(h * 0.024f) };
+                ps.normal.textColor = Color.white;
+                string who = sp.Owner == Human ? "YOU" : "OPPONENT";
+                GUI.Label(new Rect(box.x + 14, box.y + 8, box.width - 20, box.height - 12),
+                    $"{st.Name}  ({who})\nAttack    {st.Attack}\nDefense  {st.Defense}\nMove      {st.Movement}", ps);
+            }
 
             // Three buttons in a row that always fits the width, lifted off the bottom safe area.
             var bstyle = new GUIStyle(GUI.skin.button) { fontSize = Mathf.RoundToInt(h * 0.022f), wordWrap = true };

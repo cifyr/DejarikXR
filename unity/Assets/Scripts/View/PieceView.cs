@@ -226,18 +226,21 @@ namespace Dejarik.View
             Destroy(gameObject);
         }
 
+        // Corrects for the imported models' intrinsic forward axis (set once we see them on the optics).
+        public static float FacingOffsetDeg = 180f;
+
         static float YawToCenter(int space)
         {
-            if (space == Board.Center) return 0f;
+            if (space == Board.Center) return FacingOffsetDeg;
             Vector3 p = BoardLayout.Pos3D(space);
-            return Mathf.Atan2(-p.x, -p.z) * Mathf.Rad2Deg;
+            return Mathf.Atan2(-p.x, -p.z) * Mathf.Rad2Deg + FacingOffsetDeg;
         }
 
         static float YawToward(Vector3 fromLocal, Vector3 toLocal)
         {
             float dx = toLocal.x - fromLocal.x, dz = toLocal.z - fromLocal.z;
-            if (Mathf.Abs(dx) < 1e-5f && Mathf.Abs(dz) < 1e-5f) return 0f;
-            return Mathf.Atan2(dx, dz) * Mathf.Rad2Deg;
+            if (Mathf.Abs(dx) < 1e-5f && Mathf.Abs(dz) < 1e-5f) return FacingOffsetDeg;
+            return Mathf.Atan2(dx, dz) * Mathf.Rad2Deg + FacingOffsetDeg;
         }
     }
 }

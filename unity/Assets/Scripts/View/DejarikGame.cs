@@ -40,7 +40,7 @@ namespace Dejarik.View
         // Action buttons on the phone touchscreen (always reachable on the physical Beam).
         readonly Rect[] _btnRects = new Rect[3];
         Action[] _btnActions;
-        GUIStyle _btnStyle;
+        GUIStyle _btnStyle, _titleStyle, _statusStyle, _diceStyle, _turnStyle, _panelStyle;
 
 
         GameState _state;
@@ -274,21 +274,50 @@ namespace Dejarik.View
             _board.SetRimColor(HoloMaterials.HoloFor(_state.Turn)); // rim shows whose turn it is
         }
 
+        // The control panel hugs the bottom of the phone; buttons sit in its lower portion.
         void ComputeButtonRects()
         {
             float w = Screen.width, h = Screen.height, margin = w * 0.04f, gap = w * 0.025f;
-            float bw = (w - 2 * margin - 2 * gap) / 3f, bh = h * 0.11f, y = h - bh - h * 0.05f;
-            _btnRects[0] = new Rect(margin, y, bw, bh);
-            _btnRects[1] = new Rect(margin + bw + gap, y, bw, bh);
-            _btnRects[2] = new Rect(margin + 2 * (bw + gap), y, bw, bh);
+            float panelH = h * 0.26f, panelY = h - panelH;
+            float bh = panelH * 0.42f, by = panelY + panelH - bh - h * 0.03f;
+            float bw = (w - 2 * margin - 2 * gap) / 3f;
+            _btnRects[0] = new Rect(margin, by, bw, bh);
+            _btnRects[1] = new Rect(margin + bw + gap, by, bw, bh);
+            _btnRects[2] = new Rect(margin + 2 * (bw + gap), by, bw, bh);
         }
 
-        // Action buttons drawn on the phone screen; taps handled in Update via Touchscreen hit-testing.
+        // Holographic phone overlay: deep-space control bar with title, turn indicator, status/dice, and the
+        // three glowing action buttons. Matches the web app's vibe. Taps are hit-tested in Update.
         void OnGUI()
         {
             if (!_setupDone) return;
-            _btnStyle ??= new GUIStyle(GUI.skin.button) { fontSize = Mathf.RoundToInt(Screen.height * 0.024f), wordWrap = true };
+            float w = Screen.width, h = Screen.height;
+            int big = Mathf.RoundToInt(h * 0.030f), mid = Mathf.RoundToInt(h * 0.024f), small = Mathf.RoundToInt(h * 0.020f);
+
+            _btnStyle ??= HoloGui.Button(mid);
+            _titleStyle ??= HoloGui.Label(big, HoloGui.Cyan, TextAnchor.MiddleLeft, FontStyle.Bold);
+            _turnStyle ??= HoloGui.Label(mid, HoloGui.Cyan, TextAnchor.MiddleRight, FontStyle.Bold);
+            _statusStyle ??= HoloGui.Label(small, HoloGui.Foreground, TextAnchor.MiddleCenter);
+            _diceStyle ??= HoloGui.Label(small, HoloGui.Amber, TextAnchor.MiddleCenter, FontStyle.Bold);
+            _panelStyle ??= HoloGui.Panel(0);
+
             ComputeButtonRects();
+            float panelH = h * 0.26f, panelY = h - panelH, margin = w * 0.04f;
+            var panel = new Rect(0, panelY, w, panelH);
+            GUI.Box(panel, GUIContent.none, _panelStyle);
+
+            float row = panelY + panelH * 0.06f, rowH = panelH * 0.18f;
+            GUI.Label(new Rect(margin, row, w * 0.5f, rowH), "DEJARIK", _titleStyle);
+
+            bool yours = _state != null && _state.Turn == Human;
+            _turnStyle.normal.textColor = yours ? HoloGui.Cyan : HoloGui.Amber;
+            GUI.Label(new Rect(w * 0.45f - margin, row, w * 0.55f, rowH), yours ? "● YOUR TURN" : "● OPPONENT", _turnStyle);
+
+            float statusY = row + rowH + panelH * 0.03f;
+            GUI.Label(new Rect(margin, statusY, w - 2 * margin, rowH), _hud ?? "", _statusStyle);
+            if (!string.IsNullOrEmpty(_diceHud))
+                GUI.Label(new Rect(margin, statusY + rowH * 0.85f, w - 2 * margin, rowH), _diceHud, _diceStyle);
+
             GUI.Button(_btnRects[0], "RECENTER", _btnStyle);
             GUI.Button(_btnRects[1], "PIN BOARD", _btnStyle);
             GUI.Button(_btnRects[2], "NEW GAME", _btnStyle);

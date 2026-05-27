@@ -10,8 +10,9 @@ namespace Dejarik.View
     // (TryGetTip returns false) when no hand is tracked, so the gaze pointer can take over.
     public class HandSelector : MonoBehaviour
     {
-        const float PinchOn = 0.025f;   // tips closer than this = pinching
-        const float PinchOff = 0.04f;   // hysteresis to release
+        // Tuned to on-device data: a full pinch only closes index-thumb tips to ~0.04 m on this tracker.
+        const float PinchOn = 0.05f;    // tips closer than this = pinching
+        const float PinchOff = 0.065f;  // hysteresis to release
 
         XRHandSubsystem _subsys;
         Transform _origin;

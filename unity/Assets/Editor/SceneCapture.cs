@@ -30,8 +30,8 @@ namespace XrealAR.EditorTools
             EditorSettings.enterPlayModeOptionsEnabled = true;
             EditorSettings.enterPlayModeOptions = EnterPlayModeOptions.DisableDomainReload | EnterPlayModeOptions.DisableSceneReload;
             EditorSceneManager.OpenScene("Assets/Scenes/Main.unity");
-            Dejarik.View.DejarikGame.DebugAutoSelect = true; // preview selection highlights / stats panel
-            Dejarik.View.DejarikGame.DebugSampleDiceHud = hud;
+            Dejarik.View.DejarikGame.DebugAutoSelect = true;     // preview selection highlights / stats panel
+            Dejarik.View.DejarikGame.DebugSampleDiceHud = true;  // show a sample dice line in the world HUD
             EditorApplication.update += Tick;
             EditorApplication.EnterPlaymode();
         }
@@ -59,16 +59,16 @@ namespace XrealAR.EditorTools
 
         static void Capture()
         {
-            // Frame the board (DejarikGame places it ~ (0, 0.6, 0.8) relative to the origin camera).
-            Vector3 target = new Vector3(0f, 0.6f, 0.8f);
+            // Frame the board (DejarikGame now places it ~ (0, -0.35, 0.5) relative to the origin camera).
+            Vector3 target = new Vector3(0f, -0.35f, 0.5f);
             var go = new GameObject("CaptureCam");
             var cam = go.AddComponent<Camera>();
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.backgroundColor = new Color(0.10f, 0.10f, 0.13f, 1f); // dark gray, not pure black, to spot a black plane
             cam.nearClipPlane = 0.01f;
-            cam.fieldOfView = 45f;
-            go.transform.position = target + new Vector3(0.0f, 0.62f, -0.62f); // 3/4 view framing whole board + pieces
-            go.transform.LookAt(target);
+            cam.fieldOfView = 55f;
+            go.transform.position = target + new Vector3(0.0f, 0.7f, -1.05f); // pulled back to frame board + HUD + buttons
+            go.transform.LookAt(target + new Vector3(0f, 0.18f, 0f));
 
             int w = 1280, h = 960;
             var rt = new RenderTexture(w, h, 24);

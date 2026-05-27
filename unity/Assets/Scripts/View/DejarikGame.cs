@@ -13,8 +13,9 @@ namespace Dejarik.View
     // The pure rules live in Dejarik.Engine; this class only renders/animates state transitions.
     public class DejarikGame : MonoBehaviour
     {
-        [SerializeField] float tableRadius = 0.45f;       // board play-radius in meters
-        [SerializeField] Vector3 startOffset = new Vector3(0f, 0.6f, 0.8f); // board center vs tracking origin
+        [SerializeField] float tableRadius = 0.6f;     // board play-radius in meters
+        [SerializeField] float reachForward = 0.5f;    // board distance in front of the head
+        [SerializeField] float reachDown = 0.35f;      // board drop below eye level (to hand reach)
         const Player Human = Player.P0;
 
         // Combat timing (ms), mirroring src/game/timing.ts.
@@ -26,7 +27,13 @@ namespace Dejarik.View
         GameAudio _audio;
         GazeSelector _input;
         HandSelector _hand;
+        WorldHud _world;
         AnchorPlacementController _anchors;
+
+        // Centralized per-frame pointer (computed in Update, consumed by the turn coroutines).
+        int _ptrSpace = -1;
+        bool _ptrConfirm;
+        WorldHud.Button _hoverButton;
 
         GameState _state;
         Rng _rng;
@@ -51,6 +58,8 @@ namespace Dejarik.View
             rootGO.transform.localScale = Vector3.one * (tableRadius / BoardLayout.Rim);
             _board = rootGO.AddComponent<BoardView>();
             _board.Build();
+            _world = gameObject.AddComponent<WorldHud>();
+            _world.Build(_board.Root, Recenter, PinBoard, () => { _ = NewGame(); });
             Recenter();
 
             await NewGame();
@@ -78,7 +87,7 @@ namespace Dejarik.View
             Debug.Log($"[Dejarik] {_views.Count} pieces loaded; board pos={_board.Root.position} scale={_board.Root.lossyScale.x:F3}");
 
             _setupDone = true;
-            if (DebugSampleDiceHud) { _diceHud = "Molator  24    vs    9  Ghhhk"; DebugHudReport(1080, 2400); DebugHudReport(2400, 1080); }
+            if (DebugSampleDiceHud) _diceHud = "Molator  24    vs    9  Ghhhk";
             StartCoroutine(RunGame());
         }
 
@@ -114,7 +123,7 @@ namespace Dejarik.View
         {
             _selectedId = null;
             RefreshHighlights();
-            _hud = "Your move — point at a piece and pinch (or tap the Beam).";
+            _hud = "Your move — pinch a piece";
             if (DebugAutoSelect)
             {
                 var mine = Engine.PiecesOf(_state, Human);
@@ -123,18 +132,15 @@ namespace Dejarik.View
             while (true)
             {
                 yield return null;
-                UpdateGaze(out int sp, out bool hit, out bool confirm);
-                if (!confirm || !hit) continue;
+                if (!_ptrConfirm || _ptrSpace < 0) continue;
+                _ptrConfirm = false;
 
                 var before = _state;
-                if (TryHumanClick(sp))
+                if (TryHumanClick(_ptrSpace) && !ReferenceEquals(before, _state))
                 {
-                    if (!ReferenceEquals(before, _state))
-                    {
-                        yield return PlayFx(_state);
-                        SyncViews();
-                        yield break;
-                    }
+                    yield return PlayFx(_state);
+                    SyncViews();
+                    yield break;
                 }
             }
         }
@@ -170,10 +176,10 @@ namespace Dejarik.View
             while (true)
             {
                 yield return null;
-                UpdateGaze(out int sp, out bool hit, out bool confirm);
-                if (confirm && hit && opts.Contains(sp))
+                if (_ptrConfirm && _ptrSpace >= 0 && opts.Contains(_ptrSpace))
                 {
-                    _state = Engine.ResolvePush(_state, sp);
+                    _ptrConfirm = false;
+                    _state = Engine.ResolvePush(_state, _ptrSpace);
                     _board.ClearHighlights();
                     yield return PlayFx(_state);
                     SyncViews();
@@ -205,30 +211,45 @@ namespace Dejarik.View
             _board.SetHighlights(moves, atkSpaces, null, selSpace);
         }
 
-        // Primary: pinch the cell/piece nearest your fingertip. Fallback (when the hand isn't tracked, since
-        // hand tracking is flaky on this hardware): head-gaze pointer + Beam tap, so you're never stuck.
-        string _inputDbg = "";
-        void UpdateGaze(out int space, out bool hit, out bool confirm)
+        // Centralized input, once per frame. Primary: pinch the cell/piece (or button) nearest your
+        // fingertip. Fallback only when NO hand is tracked at all: head-gaze + Beam tap (so you're never
+        // fully stuck). Buttons are handled here so they work in any phase.
+        void Update()
         {
-            const float maxDist = 0.10f; // fingertip within ~10cm of a cell center points at it
-            space = -1; hit = false; confirm = false;
+            if (!_setupDone || _world == null) return;
 
-            bool handPointing = false;
+            // Push HUD content.
+            _world.SetStatus(_hud);
+            _world.SetDice(_diceHud);
+            _world.SetStats(_statsPieceId != null ? Engine.GetPiece(_state, _statsPieceId) : null);
+
+            _ptrSpace = -1; _hoverButton = null; _ptrConfirm = false;
+            const float maxDist = 0.13f; // fingertip within ~13cm selects (board radius ~0.6 m)
+
+            bool confirm = false;
             if (_hand != null && _hand.TryGetTip(out var tip, out bool pinch))
             {
-                if (_board.NearestSpace(tip, maxDist, out space)) { hit = true; handPointing = true; _input.SetReticle(_board.WorldPos(space)); }
-                if (pinch && hit) { confirm = true; Debug.Log($"[Dejarik] pinch -> space={space}"); }
+                confirm = pinch || _input.ConfirmDown;
+                if (_world.NearestButton(tip, maxDist, out var b)) { _hoverButton = b; _input.SetReticle(b.Tr.position); }
+                else if (_board.NearestSpace(tip, maxDist, out var sp)) { _ptrSpace = sp; _input.SetReticle(_board.WorldPos(sp)); }
+                else _input.SetReticle(tip);
             }
-
-            if (!handPointing) // gaze fallback
+            else // no hand tracked: gaze + Beam tap fallback
             {
-                hit = _board.Raycast(_input.CurrentRay, out space);
-                _input.SetReticle(hit ? _board.WorldPos(space) : (Vector3?)null);
-                if (_input.ConfirmDown && hit) { confirm = true; Debug.Log($"[Dejarik] gaze tap -> space={space}"); }
+                confirm = _input.ConfirmDown;
+                if (_world.RaycastButton(_input.CurrentRay, out var b)) { _hoverButton = b; _input.SetReticle(b.Tr.position); }
+                else if (_board.Raycast(_input.CurrentRay, out var sp)) { _ptrSpace = sp; _input.SetReticle(_board.WorldPos(sp)); }
+                else _input.SetReticle(null);
             }
 
-            _inputDbg = _hand != null ? _hand.Status : "no hand selector";
+            if (confirm)
+            {
+                if (_hoverButton != null) { Debug.Log("[Dejarik] button pressed"); _hoverButton.OnClick?.Invoke(); }
+                else if (_ptrSpace >= 0) { _ptrConfirm = true; Debug.Log($"[Dejarik] confirm space={_ptrSpace}"); }
+            }
         }
+
+        void PinBoard() { if (_anchors != null) _ = _anchors.PinAsync(_board.Root, "dejarik-board"); }
 
         // ---- bot ----
 
@@ -357,25 +378,6 @@ namespace Dejarik.View
             _diceHud = null;
         }
 
-        // Verifies the HUD content + that every element fits on-screen at a given resolution (we can't
-        // pixel-capture IMGUI headlessly). Mirrors the rects computed in OnGUI.
-        void DebugHudReport(float w, float h)
-        {
-            float margin = w * 0.04f;
-            float gap = w * 0.025f;
-            float bw = (w - 2 * margin - 2 * gap) / 3f;
-            float bh = h * 0.10f;
-            float by = h - bh - h * 0.06f;
-            float btnRight = margin + 2 * (bw + gap) + bw;
-            var statsBox = new Rect(margin, h * 0.24f, w * 0.46f, h * 0.20f);
-            var sp0 = _statsPieceId != null ? Engine.GetPiece(_state, _statsPieceId) : null;
-            string stats = sp0 != null ? $"{Pieces.Stats[sp0.Type].Name} A{Pieces.Stats[sp0.Type].Attack}/D{Pieces.Stats[sp0.Type].Defense}/M{Pieces.Stats[sp0.Type].Movement}" : "none";
-            bool buttonsFit = btnRight <= w + 0.5f && by + bh <= h;
-            bool statsFit = statsBox.xMax <= w && statsBox.yMax <= h;
-            Debug.Log($"[HUD] {w}x{h}: hud='{_hud}' dice='{_diceHud}' stats=({stats}) " +
-                      $"buttonsRight={btnRight:F0}/{w} fit={buttonsFit} statsBox={statsBox} fit={statsFit}");
-        }
-
         PieceView FindViewAtSpace(int space)
         {
             foreach (var v in _views.Values) if (v != null && v.Space == space) return v;
@@ -398,86 +400,14 @@ namespace Dejarik.View
                 }
         }
 
-        // ---- placement + HUD ----
-
+        // Place the board in front of and below the head, at hand-reach height so you can pinch the cells.
         void Recenter()
         {
             var cam = Camera.main;
-            if (cam == null) { _board.Root.position = startOffset; return; }
+            if (cam == null) { _board.Root.position = new Vector3(0f, -reachDown, reachForward); _board.Root.rotation = Quaternion.identity; return; }
             Vector3 fwd = cam.transform.forward; fwd.y = 0f; fwd = fwd.sqrMagnitude < 1e-4f ? Vector3.forward : fwd.normalized;
-            _board.Root.position = cam.transform.position + fwd * startOffset.z + Vector3.up * (startOffset.y - cam.transform.position.y);
+            _board.Root.position = cam.transform.position + fwd * reachForward + Vector3.up * -reachDown;
             _board.Root.rotation = Quaternion.identity;
-        }
-
-        static bool _hudLogged;
-        void OnGUI()
-        {
-            if (!_setupDone) return;
-            float w = Screen.width, h = Screen.height;
-            float margin = w * 0.04f;
-
-            if (!_hudLogged && Event.current.type == EventType.Repaint)
-            {
-                _hudLogged = true;
-                var sp0 = _statsPieceId != null ? Engine.GetPiece(_state, _statsPieceId) : null;
-                Debug.Log($"[HUD] screen={w}x{h} hud='{_hud}' dice='{_diceHud}' stats={(sp0 != null ? Pieces.Stats[sp0.Type].Name : "none")} input='{_inputDbg}'");
-                Debug.Log($"[HUD] statsBox=({margin},{h * 0.24f},{w * 0.46f},{h * 0.20f}) buttonsY={h - h * 0.10f - h * 0.06f} (screen h={h})");
-            }
-
-            // Status banner, kept inside the top safe area.
-            var style = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = Mathf.RoundToInt(h * 0.026f),
-                alignment = TextAnchor.MiddleCenter,
-                wordWrap = true,
-            };
-            style.normal.textColor = Color.white;
-            GUI.Label(new Rect(margin, h * 0.05f, w - 2 * margin, h * 0.08f), _hud, style);
-
-            // Dice roll totals during combat.
-            if (!string.IsNullOrEmpty(_diceHud))
-            {
-                var dstyle = new GUIStyle(GUI.skin.label)
-                {
-                    fontSize = Mathf.RoundToInt(h * 0.034f), alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold,
-                };
-                dstyle.normal.textColor = Color.white;
-                GUI.Label(new Rect(margin, h * 0.14f, w - 2 * margin, h * 0.07f), _diceHud, dstyle);
-            }
-
-            // Selected-piece stats panel (yours or the opponent's).
-            var sp = _statsPieceId != null ? Engine.GetPiece(_state, _statsPieceId) : null;
-            if (sp != null)
-            {
-                var st = Pieces.Stats[sp.Type];
-                var c = HoloMaterials.HoloFor(sp.Owner);
-                var box = new Rect(margin, h * 0.24f, w * 0.46f, h * 0.20f);
-                var bg = new GUIStyle(GUI.skin.box);
-                GUI.color = new Color(c.r, c.g, c.b, 0.85f);
-                GUI.Box(box, GUIContent.none);
-                GUI.color = Color.white;
-                var ps = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(h * 0.024f) };
-                ps.normal.textColor = Color.white;
-                string who = sp.Owner == Human ? "YOU" : "OPPONENT";
-                GUI.Label(new Rect(box.x + 14, box.y + 8, box.width - 20, box.height - 12),
-                    $"{st.Name}  ({who})\nAttack    {st.Attack}\nDefense  {st.Defense}\nMove      {st.Movement}", ps);
-            }
-
-            // Input/hand-tracking status (diagnostic), just above the buttons.
-            var dbg = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(h * 0.018f), alignment = TextAnchor.MiddleCenter };
-            dbg.normal.textColor = new Color(0.6f, 0.85f, 1f);
-            GUI.Label(new Rect(margin, h - h * 0.06f - h * 0.10f - h * 0.05f, w - 2 * margin, h * 0.045f), $"input: {_inputDbg}", dbg);
-
-            // Three buttons in a row that always fits the width, lifted off the bottom safe area.
-            var bstyle = new GUIStyle(GUI.skin.button) { fontSize = Mathf.RoundToInt(h * 0.022f), wordWrap = true };
-            float gap = w * 0.025f;
-            float bw = (w - 2 * margin - 2 * gap) / 3f;
-            float bh = h * 0.10f;
-            float y = h - bh - h * 0.06f;
-            if (GUI.Button(new Rect(margin, y, bw, bh), "RECENTER", bstyle)) Recenter();
-            if (GUI.Button(new Rect(margin + bw + gap, y, bw, bh), "PIN", bstyle) && _anchors != null)
-                _ = _anchors.PinAsync(_board.Root, "dejarik-board");
-            if (GUI.Button(new Rect(margin + 2 * (bw + gap), y, bw, bh), "NEW GAME", bstyle)) _ = NewGame();
         }
     }
 }

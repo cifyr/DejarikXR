@@ -14,6 +14,34 @@ namespace Dejarik.View
         readonly List<GameObject> _rig = new List<GameObject>();
         Coroutine _running;
         PhysicsMaterial _bounce;
+        Texture2D _pips;
+
+        // A die face (5 pips) — light face with dark pips, like the web game's dice.
+        static Texture2D PipTexture()
+        {
+            int s = 96;
+            var tex = new Texture2D(s, s);
+            Color light = HoloMaterials.Hex("#dff6ff"), dark = HoloMaterials.Hex("#06121a");
+            var px = new Color[s * s];
+            for (int i = 0; i < px.Length; i++) px[i] = light;
+            float r = s * 0.10f;
+            Vector2[] pips = { new Vector2(0.27f, 0.27f), new Vector2(0.73f, 0.27f), new Vector2(0.5f, 0.5f),
+                               new Vector2(0.27f, 0.73f), new Vector2(0.73f, 0.73f) };
+            foreach (var p in pips)
+            {
+                int cx = (int)(p.x * s), cy = (int)(p.y * s);
+                for (int y = -((int)r); y <= r; y++)
+                    for (int x = -((int)r); x <= r; x++)
+                        if (x * x + y * y <= r * r)
+                        {
+                            int px2 = cx + x, py2 = cy + y;
+                            if (px2 >= 0 && px2 < s && py2 >= 0 && py2 < s) px[py2 * s + px2] = dark;
+                        }
+            }
+            tex.SetPixels(px);
+            tex.Apply();
+            return tex;
+        }
 
         public void ShowRoll(int atkTotal, int defTotal, int atkCount, int defCount, Player attacker, Vector3 boardCenter)
         {
@@ -25,7 +53,8 @@ namespace Dejarik.View
         IEnumerator Run(int atkCount, int defCount, Player attacker, Vector3 center)
         {
             EnsureRig(center);
-            float die = 0.022f;
+            if (_pips == null) _pips = PipTexture();
+            float die = 0.034f;
             void Spawn(int n, Color col)
             {
                 for (int i = 0; i < n && i < 10; i++)
@@ -33,18 +62,23 @@ namespace Dejarik.View
                     var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
                     go.transform.SetParent(transform, true);
                     go.transform.localScale = Vector3.one * die;
-                    Vector2 off = Random.insideUnitCircle * 0.04f;
-                    go.transform.position = center + new Vector3(off.x, 0.22f + i * 0.01f, off.y);
+                    Vector2 off = Random.insideUnitCircle * 0.05f;
+                    go.transform.position = center + new Vector3(off.x, 0.28f + i * 0.012f, off.y);
                     go.transform.rotation = Random.rotation;
                     var mr = go.GetComponent<MeshRenderer>();
-                    var m = new Material(Shader.Find("Unlit/Color")) { color = Color.Lerp(col, Color.white, 0.25f) };
+                    var m = new Material(Shader.Find("Dejarik/Hologram"));
+                    m.SetTexture("_MainTex", _pips);
+                    m.SetColor("_HoloColor", Color.Lerp(col, Color.white, 0.3f));
+                    m.SetFloat("_RimPower", 1.8f);
+                    m.SetFloat("_Glow", 1.1f);
+                    m.SetFloat("_Alpha", 0.97f);
                     mr.material = m;
                     var bc = go.GetComponent<BoxCollider>();
                     bc.material = _bounce;
                     var rb = go.AddComponent<Rigidbody>();
-                    rb.mass = 0.02f;
-                    rb.linearVelocity = new Vector3(Random.Range(-0.1f, 0.1f), -0.2f, Random.Range(-0.1f, 0.1f));
-                    rb.angularVelocity = Random.insideUnitSphere * 12f;
+                    rb.mass = 0.03f;
+                    rb.linearVelocity = new Vector3(Random.Range(-0.15f, 0.15f), -0.1f, Random.Range(-0.15f, 0.15f));
+                    rb.angularVelocity = Random.insideUnitSphere * 16f;
                     _spawned.Add(go);
                 }
             }

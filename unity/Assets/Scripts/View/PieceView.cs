@@ -152,14 +152,9 @@ namespace Dejarik.View
             }
             if (_inner != null) _inner.localPosition = new Vector3(0f, 0f, offZ);
 
-            // Selection emissive pulse + gentle scale.
-            float pulse = _selected ? 0.5f + 0.12f * Mathf.Abs(Mathf.Sin(Time.time * 6f)) : 0f;
-            float baseEi = 0.9f;
-            foreach (var m in _c.Materials)
-            {
-                var holo = HoloMaterials.HoloFor(Owner);
-                m.SetColor("_EmissionColor", holo * (baseEi + pulse));
-            }
+            // Selection glow pulse + gentle scale (drives the hologram shader's _Glow).
+            float pulse = _selected ? 0.6f + 0.25f * Mathf.Abs(Mathf.Sin(Time.time * 6f)) : 0f;
+            foreach (var m in _c.Materials) m.SetFloat("_Glow", 1f + pulse);
             float scaleMul = _selected ? 1f + 0.03f + 0.015f * Mathf.Sin(Time.time * 6f) : 1f;
             transform.localScale = Vector3.one * (BoardLayout.PieceScale * scaleMul);
         }
@@ -217,8 +212,8 @@ namespace Dejarik.View
                 float opacity = (1f - t) * flicker;
                 foreach (var m in _c.Materials)
                 {
-                    var col = m.color; col.a = opacity; m.color = col;
-                    m.SetColor("_EmissionColor", HoloMaterials.HoloFor(Owner) * (0.4f + 2.5f * t));
+                    m.SetFloat("_Alpha", opacity);
+                    m.SetFloat("_Glow", 1f + 2.5f * t);
                 }
                 transform.localScale = Vector3.one * (BoardLayout.PieceScale * (1f - 0.25f * t));
                 yield return null;

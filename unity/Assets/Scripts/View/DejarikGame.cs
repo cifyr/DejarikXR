@@ -67,7 +67,7 @@ namespace Dejarik.View
             _board = rootGO.AddComponent<BoardView>();
             _board.Build();
             _world = gameObject.AddComponent<WorldHud>();
-            _world.Build();
+            _world.Build(_board.Root);
             _btnActions = new Action[] { Recenter, PinBoard, () => { _ = NewGame(); } };
             Recenter();
 
@@ -396,6 +396,7 @@ namespace Dejarik.View
             yield return new WaitForSeconds((STRIKE_AT - COMBAT_LEAD) / 1000f);
             if (atkView != null) atkView.PlayAttack(combat.Outcome == Outcome.Kill);
             _audio.PlayStrike();
+            _audio.PlayRoar();
 
             yield return new WaitForSeconds((REACT_AT - STRIKE_AT) / 1000f);
             foreach (var d in deaths)

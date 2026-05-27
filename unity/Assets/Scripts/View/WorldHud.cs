@@ -1,49 +1,37 @@
-using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using Dejarik;
 
 namespace Dejarik.View
 {
-    // Head-locked info HUD: world-space text (status, dice totals, piece stats) RIGIDLY parented to the
-    // camera so it's pinned exactly to the view with no lag (re-positioning each frame in LateUpdate trails
-    // the head). Kept within the glasses' narrow FOV. Action buttons live on the phone (DejarikGame.OnGUI).
+    // Info HUD that floats above the board (world-anchored) and turns to face the player. Shows the status
+    // line, dice totals, and selected-piece stats. (Action buttons are on the phone — DejarikGame.OnGUI.)
     public class WorldHud : MonoBehaviour
     {
-        const float Depth = 0.5f;   // meters in front of the eyes
-
-        Transform _root;
+        Transform _board;
+        Camera _cam;
         TMP_Text _status, _dice, _stats;
+        float _yStatus, _yDice, _yStats;
 
-        public void Build()
+        public void Build(Transform board)
         {
-            _root = new GameObject("HudRoot").transform;
-            Attach();
-            _status = MakeText("status", new Vector3(0f, 0.090f, Depth), 0.17f, Color.white, TextAlignmentOptions.Center, 0.9f);
-            _dice = MakeText("dice", new Vector3(0f, 0.038f, Depth), 0.26f, Color.white, TextAlignmentOptions.Center, 0.9f);
-            _stats = MakeText("stats", new Vector3(0f, -0.02f, Depth), 0.16f, Color.white, TextAlignmentOptions.Center, 0.9f);
+            _board = board;
+            _cam = Camera.main;
+            _status = MakeText("status", 0.16f, Color.white, TextAlignmentOptions.Center);
+            _dice = MakeText("dice", 0.22f, Color.white, TextAlignmentOptions.Center);
+            _stats = MakeText("stats", 0.14f, Color.white, TextAlignmentOptions.Center);
+            _yStatus = 0.42f; _yDice = 0.30f; _yStats = 0.18f; // heights above the board
         }
 
-        void Attach()
-        {
-            var cam = Camera.main;
-            if (cam == null) return;
-            _root.SetParent(cam.transform, false);
-            _root.localPosition = Vector3.zero;
-            _root.localRotation = Quaternion.identity;
-        }
-
-        TMP_Text MakeText(string name, Vector3 localPos, float size, Color color, TextAlignmentOptions align, float width)
+        TMP_Text MakeText(string name, float size, Color color, TextAlignmentOptions align)
         {
             var go = new GameObject(name);
-            go.transform.SetParent(_root, false);
-            go.transform.localPosition = localPos;
-            go.transform.localRotation = Quaternion.identity; // faces +Z (forward) — readable, parented to the eye
+            go.transform.SetParent(transform, false);
             var tmp = go.AddComponent<TextMeshPro>();
             tmp.fontSize = size;
             tmp.color = color;
             tmp.alignment = align;
-            tmp.rectTransform.sizeDelta = new Vector2(width, 0.16f);
+            tmp.rectTransform.sizeDelta = new Vector2(1.6f, 0.2f);
             tmp.text = "";
             return tmp;
         }
@@ -61,10 +49,22 @@ namespace Dejarik.View
             _stats.text = $"{st.Name} ({who})   ATK {st.Attack}  DEF {st.Defense}  MOV {st.Movement}";
         }
 
-        // Re-attach if the camera wasn't ready at Build (rigid parenting otherwise needs no per-frame work).
         void LateUpdate()
         {
-            if (_root != null && _root.parent == null) Attach();
+            if (_board == null) return;
+            if (_cam == null) _cam = Camera.main;
+            Vector3 baseP = _board.position;
+            Place(_status, baseP + Vector3.up * _yStatus);
+            Place(_dice, baseP + Vector3.up * _yDice);
+            Place(_stats, baseP + Vector3.up * _yStats);
+        }
+
+        void Place(TMP_Text t, Vector3 pos)
+        {
+            if (t == null) return;
+            t.transform.position = pos;
+            if (_cam != null)
+                t.transform.rotation = Quaternion.LookRotation(pos - _cam.transform.position, Vector3.up); // face the player
         }
     }
 }

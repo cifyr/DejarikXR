@@ -19,6 +19,7 @@ namespace Dejarik.View
         }
 
         public void PlayDice() => Play(Noise(0.5f, 0.25f, 1600f), 0.5f);
+        public void PlayRoar() => Play(Roar(0.6f), 0.7f);
         public void PlayMove() => Play(Tone(0.12f, 420f, 0.3f), 0.4f);
         public void PlayStrike() => Play(Tone(0.18f, 180f, 0.02f, true), 0.8f);
         public void PlayDeath() => Play(Sweep(0.5f, 900f, 90f), 0.7f);
@@ -68,6 +69,23 @@ namespace Dejarik.View
                 d[i] = s * Mathf.Exp(-t / decay);
             }
             return Clip("noise", d, sr);
+        }
+
+        // Low growl with vibrato + grit — a creature roar.
+        static AudioClip Roar(float dur)
+        {
+            int sr = 44100, n = (int)(sr * dur);
+            var d = new float[n];
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)sr;
+                float vib = 1f + 0.06f * Mathf.Sin(2f * Mathf.PI * 18f * t);
+                float f = 110f * vib;
+                float saw = 2f * (t * f - Mathf.Floor(0.5f + t * f));
+                float env = Mathf.Min(1f, t * 10f) * Mathf.Exp(-t / 0.4f);
+                d[i] = (0.7f * saw + 0.3f * (Random.value * 2f - 1f)) * env;
+            }
+            return Clip("roar", d, sr);
         }
 
         static AudioClip Chord(float dur, float[] freqs)

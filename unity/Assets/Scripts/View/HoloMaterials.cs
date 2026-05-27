@@ -20,18 +20,12 @@ namespace Dejarik.View
         // toward white, and uses the diffuse as the emission map glowing in the player's holo color.
         public static Material Creature(Texture mainTex, Texture normalMap, Player owner)
         {
-            var holo = HoloFor(owner);
-            var mat = new Material(Shader.Find("Standard"));
-            mat.SetFloat("_Glossiness", 0.2f);
-            mat.SetFloat("_Metallic", 0f);
+            var mat = new Material(Shader.Find("Dejarik/Hologram"));
             if (mainTex != null) mat.SetTexture("_MainTex", mainTex);
-            if (normalMap != null) { mat.SetTexture("_BumpMap", normalMap); mat.EnableKeyword("_NORMALMAP"); }
-            mat.color = Color.Lerp(holo, Color.white, 0.55f);
-            mat.EnableKeyword("_EMISSION");
-            mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
-            if (mainTex != null) mat.SetTexture("_EmissionMap", mainTex);
-            mat.SetColor("_EmissionColor", holo * 0.9f);
-            SetFade(mat, 0.92f);
+            mat.SetColor("_HoloColor", HoloFor(owner));
+            mat.SetFloat("_RimPower", 2.2f);
+            mat.SetFloat("_Glow", 1f);
+            mat.SetFloat("_Alpha", 0.92f);
             return mat;
         }
 

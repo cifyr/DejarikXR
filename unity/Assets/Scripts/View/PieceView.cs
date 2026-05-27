@@ -45,33 +45,34 @@ namespace Dejarik.View
             StartCoroutine(Ground());
         }
 
-        // CreatureFactory grounds the bind pose, but the idle animation can momentarily lift the feet, so a
-        // single-frame sample can read a low-reaching limb and shove the whole creature UP (the float bug).
-        // Instead, sample the LOWEST the creature reaches over ~1s and drop it so that point rests on the
-        // cell plane. Clamp to downward-only so a transient low frame can never lift a planted creature.
+        // CreatureFactory grounds the bind pose, but the idle animation shifts the feet, so a single frame is
+        // unreliable: a swung limb/staff reads as the lowest point and shoves the whole creature off the board.
+        // Sample the bounds' min.y over ~1s and ground to the 25th percentile — the height the feet sit at
+        // when planted, ignoring transient deep dips (a low-reaching limb) and transient lifts (a bob).
         IEnumerator Ground()
         {
             if (_c == null) yield break;
             var rs = _c.Holder.GetComponentsInChildren<Renderer>();
             if (rs.Length == 0) yield break;
             float planeY = transform.position.y;   // where the feet should rest (PieceView origin = cell top)
-            float lowest = float.MaxValue;
+            var samples = new List<float>(64);
             float t0 = Time.time;
             while (Time.time - t0 < 1.0f)
             {
                 var b = rs[0].bounds;
                 for (int i = 1; i < rs.Length; i++) b.Encapsulate(rs[i].bounds);
-                lowest = Mathf.Min(lowest, b.min.y);
+                samples.Add(b.min.y);
                 yield return null;
             }
+            if (samples.Count == 0) yield break;
+            samples.Sort();
+            float planted = samples[Mathf.Clamp(samples.Count / 4, 0, samples.Count - 1)]; // 25th percentile
             float scaleY = _inner.lossyScale.y;
             if (Mathf.Abs(scaleY) < 1e-5f) yield break;
-            float offsetWorld = Mathf.Min(0f, planeY - lowest); // floaters drop; planted/sunk are left alone
-            if (offsetWorld > -1e-4f) yield break;
             var lp = _c.Holder.transform.localPosition;
-            float endY = lp.y + offsetWorld / scaleY;
+            float endY = lp.y + (planeY - planted) / scaleY;
             float lt = 0f;
-            while (lt < 0.25f) // ease down to avoid a pop
+            while (lt < 0.25f) // ease to avoid a pop
             {
                 lt += Time.deltaTime;
                 lp = _c.Holder.transform.localPosition;

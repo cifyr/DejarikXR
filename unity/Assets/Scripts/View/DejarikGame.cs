@@ -136,7 +136,7 @@ namespace Dejarik.View
         {
             _selectedId = null;
             RefreshHighlights();
-            _hud = "Your move — pinch a piece";
+            _hud = "Your move — select a piece";
             if (DebugAutoSelect)
             {
                 var mine = Engine.PiecesOf(_state, Human);
@@ -207,6 +207,7 @@ namespace Dejarik.View
             _selectedId = id;
             foreach (var kv in _views) kv.Value.SetSelected(kv.Key == id);
             RefreshHighlights();
+            if (_state.Turn == Human) _hud = "Select a glowing square to move or attack";
         }
 
         void Deselect()
@@ -368,34 +369,18 @@ namespace Dejarik.View
             bool chosenIsAttack = action.Type == BotAction.Kind.Attack;
             int chosenSpace = chosenIsAttack ? Engine.GetPiece(_state, action.DefenderId).Space : action.Dest;
 
-            // (a) show all options.
+            // (a) light up every square the piece could act on (board illumination, no overlay markers).
             _hud = "Opponent is choosing...";
             _board.SetHighlights(moves, atkSpaces, null, pieceSpace);
-            var markers = new List<TelegraphMarker>();
-            Color moveCol = Color.Lerp(HoloMaterials.P1, Color.white, 0.25f);
-            Color atkCol = HoloMaterials.Hex("#ff4040");
-            foreach (var sp in moves)
-            {
-                bool c = !chosenIsAttack && sp == chosenSpace;
-                markers.Add(_board.SpawnMarker(sp, c ? Color.white : moveCol, c));
-            }
-            foreach (var sp in atkSpaces)
-            {
-                bool c = chosenIsAttack && sp == chosenSpace;
-                markers.Add(_board.SpawnMarker(sp, c ? Color.white : atkCol, c));
-            }
             yield return new WaitForSeconds(0.95f);
 
-            // (b) jitter out the rejected squares; narrow the cell highlight to just the choice.
-            string keep = $"telegraph_{chosenSpace}";
-            foreach (var m in markers)
-                if (m != null && m.name != keep) StartCoroutine(m.JitterOut(0.5f));
-            if (chosenIsAttack) _board.SetHighlights(null, new List<int> { chosenSpace }, null, pieceSpace);
-            else _board.SetHighlights(new List<int> { chosenSpace }, null, null, pieceSpace);
-            yield return new WaitForSeconds(0.8f);
+            // (b) glitch out the squares it did NOT pick; the chosen square stays lit.
+            var rejected = moves.Concat(atkSpaces).Where(sp => sp != chosenSpace).Distinct().ToList();
+            _board.GlitchOutCells(rejected);
+            yield return new WaitForSeconds(0.7f);
 
-            // (c) clean up, then (d) commit + animate.
-            foreach (var m in markers) if (m != null) Destroy(m.gameObject);
+            // (c) hold a beat on the lone chosen square, then (d) commit + animate the move/attack.
+            yield return new WaitForSeconds(0.45f);
             _board.ClearHighlights();
 
             if (chosenIsAttack) _state = Engine.ApplyAttack(_state, action.AttackerId, action.DefenderId, _rng);

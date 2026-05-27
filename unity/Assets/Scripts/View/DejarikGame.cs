@@ -104,11 +104,18 @@ namespace Dejarik.View
 
         // ---- human input ----
 
+        public static bool DebugAutoSelect; // editor capture hook: select a piece to preview highlights
+
         IEnumerator HumanTurn()
         {
             _selectedId = null;
             RefreshHighlights();
-            _hud = "Your move — look at a piece and tap.";
+            _hud = "Your move — point at a piece and pinch (or tap the Beam).";
+            if (DebugAutoSelect)
+            {
+                var mine = Engine.PiecesOf(_state, Human);
+                if (mine.Count > 0) Select(mine[0].Id);
+            }
             while (true)
             {
                 yield return null;
@@ -197,18 +204,22 @@ namespace Dejarik.View
         void UpdateGaze(out int space, out bool hit, out bool confirm)
         {
             const float maxDist = 0.08f; // fingertip within ~8cm of a cell center selects it
-            if (_hand != null && _hand.TryGetTip(out var tip, out bool pinch))
-            {
-                hit = _board.NearestSpace(tip, maxDist, out space);
-                _input.SetReticle(hit ? _board.WorldPos(space) : tip);
-                confirm = pinch;
-                if (confirm) Debug.Log($"[Dejarik] hand pinch -> space={space} hit={hit}");
-                return;
-            }
-            hit = _board.Raycast(_input.CurrentRay, out space);
-            _input.SetReticle(hit ? _board.WorldPos(space) : (Vector3?)null);
-            confirm = _input.ConfirmDown;
-            if (confirm) Debug.Log($"[Dejarik] gaze tap -> space={space} hit={hit}");
+
+            // Hand pointer (only when the fingertip is actually near the board).
+            bool handHit = false; int handSpace = -1; bool pinch = false; Vector3 tip = default;
+            if (_hand != null && _hand.TryGetTip(out tip, out pinch))
+                handHit = _board.NearestSpace(tip, maxDist, out handSpace);
+
+            // Gaze pointer (always available).
+            bool gazeHit = _board.Raycast(_input.CurrentRay, out int gazeSpace);
+
+            // Prefer the hand when it's on the board, else fall back to gaze. Confirm = pinch OR Beam tap.
+            if (handHit) { space = handSpace; hit = true; _input.SetReticle(_board.WorldPos(space)); }
+            else if (gazeHit) { space = gazeSpace; hit = true; _input.SetReticle(_board.WorldPos(space)); }
+            else { space = -1; hit = false; _input.SetReticle(_hand != null && _hand.TryGetTip(out var t2, out _) ? t2 : (Vector3?)null); }
+
+            confirm = pinch || _input.ConfirmDown;
+            if (confirm) Debug.Log($"[Dejarik] confirm -> space={space} hit={hit} (pinch={pinch})");
         }
 
         // ---- bot ----

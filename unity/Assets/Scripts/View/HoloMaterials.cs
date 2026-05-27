@@ -35,38 +35,30 @@ namespace Dejarik.View
             return mat;
         }
 
-        // Flat glowing board cell for the given role.
+        // Flat glowing board cell for the given role. Unlit/Color so it shows as a pure bright color on the
+        // see-through optics regardless of scene lighting or emissive shader variants (a Standard emissive
+        // cell read as black on-device). Brightness differences make the grid pattern readable.
         public static Material Cell(CellRole role)
         {
-            // Brighter than the web (which leaned on bloom): on see-through optics a dim cell reads as
-            // black/transparent, so the base grid needs real emissive presence to be visible.
-            (string color, Color emissive, float ei) spec = role switch
+            Color c = role switch
             {
-                CellRole.Move     => ("#0a3a4a", P0, 1.4f),
-                CellRole.Attack   => ("#4a1410", P1, 1.4f),
-                CellRole.Push     => ("#2a1a4a", Hex("#b478ff"), 1.4f),
-                CellRole.Selected => ("#0a3a4a", P0, 1.0f),
-                CellRole.Center   => ("#123048", Hex("#2f7fb8"), 0.7f),
-                CellRole.Light    => ("#163a55", Hex("#2f86c0"), 0.8f),
-                _                 => ("#0e2c44", Hex("#246a9c"), 0.55f),
+                CellRole.Move     => P0,
+                CellRole.Attack   => P1,
+                CellRole.Push     => Hex("#c08cff"),
+                CellRole.Selected => Color.Lerp(P0, Color.white, 0.2f),
+                CellRole.Center   => Hex("#3a8fcf"),
+                CellRole.Light    => Hex("#2c79ad"),
+                _                 => Hex("#1d567f"),
             };
-            var mat = new Material(Shader.Find("Standard"));
-            mat.color = Hex(spec.color);
-            mat.SetFloat("_Glossiness", 0.1f);
-            mat.SetFloat("_Metallic", 0f);
-            mat.EnableKeyword("_EMISSION");
-            mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
-            mat.SetColor("_EmissionColor", spec.emissive * spec.ei);
-            return mat;
+            return Unlit(c);
         }
 
-        public static Material RimGlow()
+        public static Material RimGlow() => Unlit(Color.Lerp(P0, Color.white, 0.25f));
+
+        static Material Unlit(Color c)
         {
-            var mat = new Material(Shader.Find("Standard"));
-            mat.color = P0;
-            mat.EnableKeyword("_EMISSION");
-            mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
-            mat.SetColor("_EmissionColor", P0 * 1.1f);
+            var mat = new Material(Shader.Find("Unlit/Color"));
+            mat.color = c;
             return mat;
         }
 

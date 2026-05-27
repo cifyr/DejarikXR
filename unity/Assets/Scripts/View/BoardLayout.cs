@@ -92,6 +92,13 @@ namespace Dejarik.View
 
         static Mesh Build(List<Vector3> verts, List<int> tris)
         {
+            // Double-sided: append every triangle reversed so the cell is visible from above and below
+            // regardless of winding (single-sided shaders would otherwise cull the down-facing front).
+            int triCount = tris.Count;
+            for (int i = 0; i < triCount; i += 3)
+            {
+                tris.Add(tris[i]); tris.Add(tris[i + 2]); tris.Add(tris[i + 1]);
+            }
             var m = new Mesh();
             m.SetVertices(verts);
             m.SetTriangles(tris, 0);

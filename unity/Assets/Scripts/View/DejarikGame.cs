@@ -15,8 +15,10 @@ namespace Dejarik.View
     // The pure rules live in Dejarik.Engine; this class only renders/animates state transitions.
     public class DejarikGame : MonoBehaviour
     {
-        [SerializeField] float tableRadius = 0.5f;     // board play-radius in meters
-        [SerializeField] float reachDistance = 0.6f;   // board distance along your gaze
+        [SerializeField] float tableRadius = 0.34f;    // board play-radius in meters (2/3 of prior)
+        [SerializeField] float reachDistance = 0.68f;  // board distance along your gaze (+3in)
+        [SerializeField] float downBias = 0.2f;        // board drop below gaze (+3in)
+        bool _pokePrev;
         const Player Human = Player.P0;
 
         // Combat timing (ms), mirroring src/game/timing.ts.
@@ -234,9 +236,10 @@ namespace Dejarik.View
 
             ComputeButtonRects();
             _ptrSpace = -1; _ptrConfirm = false;
-            const float maxDist = 0.2f; // fingertip within ~20cm of a cell selects it (forgiving)
+            const float hoverRadius = 0.25f; // nearest cell within this is "hovered" (white square shown)
+            const float pokeDist = 0.085f;   // push your fingertip this close to the hovered cell to select
 
-            // A tap on the Beam touchscreen: first try the phone buttons, else it's a board-confirm.
+            // Phone tap: only the on-screen buttons.
             bool tap = false; Vector2 tapGui = default;
             var ts = Touchscreen.current;
             if (ts != null)
@@ -244,15 +247,27 @@ namespace Dejarik.View
                     if (t.press.wasPressedThisFrame) { tap = true; var p = t.position.ReadValue(); tapGui = new Vector2(p.x, Screen.height - p.y); }
             if (tap)
                 for (int i = 0; i < 3; i++)
-                    if (_btnRects[i].Contains(tapGui)) { Debug.Log($"[Dejarik] phone button {i}"); _btnActions[i]?.Invoke(); tap = false; break; }
+                    if (_btnRects[i].Contains(tapGui)) { Debug.Log($"[Dejarik] phone button {i}"); _btnActions[i]?.Invoke(); break; }
 
-            // Board interaction is pinch-only: select the cell/piece nearest your fingertip and pinch to
-            // confirm. No gaze/look-to-select. (The phone tap above is only for the on-screen buttons.)
+            // Board interaction: the cell nearest your fingertip is "hovered" and marked with a white square
+            // so you can see (and correct) the target despite hand-tracking offset. Push your finger into it
+            // (or pinch) to select it.
             bool pinch = false; Vector3 tip = default;
             bool handTracked = _hand != null && _hand.TryGetTip(out tip, out pinch);
-            if (handTracked && _board.NearestSpace(tip, maxDist, out var sp)) { _ptrSpace = sp; _input.SetReticle(_board.WorldPos(sp)); }
-            else _input.SetReticle(null);
-            if (pinch && _ptrSpace >= 0) { _ptrConfirm = true; Debug.Log($"[Dejarik] confirm space={_ptrSpace} tip={tip:F2}"); }
+            bool poke = false;
+            if (handTracked && _board.NearestSpace(tip, hoverRadius, out var sp))
+            {
+                _ptrSpace = sp;
+                _input.SetReticle(_board.WorldPos(sp));
+                poke = Vector3.Distance(tip, _board.WorldPos(sp)) < pokeDist; // finger pushed into the cell
+            }
+            else
+            {
+                _input.SetReticle(null);
+            }
+            bool selectEdge = (!_pokePrev && poke) || pinch; // poke is edge-triggered; pinch also confirms
+            _pokePrev = poke;
+            if (selectEdge && _ptrSpace >= 0) { _ptrConfirm = true; Debug.Log($"[Dejarik] select space={_ptrSpace} tip={tip:F2} poke={poke} pinch={pinch}"); }
 
             _board.SetRimColor(HoloMaterials.HoloFor(_state.Turn)); // rim shows whose turn it is
         }
@@ -436,7 +451,7 @@ namespace Dejarik.View
             var cam = Camera.main;
             if (cam == null) { _board.Root.SetPositionAndRotation(new Vector3(0f, -0.25f, 0.6f), Quaternion.Euler(0f, 180f, 0f)); return; }
             Vector3 fwd = cam.transform.forward;
-            _board.Root.position = cam.transform.position + fwd * reachDistance + Vector3.down * 0.12f;
+            _board.Root.position = cam.transform.position + fwd * reachDistance + Vector3.down * downBias;
             Vector3 flat = fwd; flat.y = 0f; flat = flat.sqrMagnitude < 1e-4f ? Vector3.forward : flat.normalized;
             _board.Root.rotation = Quaternion.LookRotation(-flat, Vector3.up);
         }

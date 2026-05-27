@@ -39,7 +39,7 @@ namespace Dejarik.View
             _reticleMat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
             _reticleMat.SetColor("_EmissionColor", HoloMaterials.P0 * 1.4f);
             go.GetComponent<MeshRenderer>().material = _reticleMat;
-            go.transform.localScale = Vector3.one * 0.02f;
+            go.transform.localScale = Vector3.one * 0.05f;
             _reticle = go.transform;
         }
 
@@ -52,7 +52,7 @@ namespace Dejarik.View
             _reticle.gameObject.SetActive(true);
             _reticle.position = worldPoint.Value;
             _reticle.rotation = Quaternion.LookRotation(worldPoint.Value - _cam.transform.position);
-            _reticleMat.color = HoloMaterials.P0;
+            _reticleMat.color = Color.white;
         }
     }
 }

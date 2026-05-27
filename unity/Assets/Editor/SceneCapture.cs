@@ -66,9 +66,9 @@ namespace XrealAR.EditorTools
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.backgroundColor = new Color(0.10f, 0.10f, 0.13f, 1f);
             cam.nearClipPlane = 0.01f;
-            cam.fieldOfView = 58f;
-            go.transform.position = new Vector3(0f, 0.18f, -0.12f);
-            go.transform.LookAt(new Vector3(0f, -0.12f, 0.6f)); // frame the gaze-placed board
+            cam.fieldOfView = 56f;
+            go.transform.position = new Vector3(0f, 0.12f, -0.05f);
+            go.transform.LookAt(new Vector3(0f, -0.18f, 0.62f)); // frame the gaze-placed board (smaller, +fwd/down)
 
             int w = 1280, h = 960;
             var rt = new RenderTexture(w, h, 24);

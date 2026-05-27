@@ -19,9 +19,9 @@ namespace Dejarik.View
         {
             _root = new GameObject("HudRoot").transform;
             Attach();
-            _status = MakeText("status", new Vector3(0f, 0.085f, Depth), 0.24f, Color.white, TextAlignmentOptions.Center, 0.7f);
-            _dice = MakeText("dice", new Vector3(0f, 0.030f, Depth), 0.30f, Color.white, TextAlignmentOptions.Center, 0.8f);
-            _stats = MakeText("stats", new Vector3(-0.16f, -0.04f, Depth), 0.20f, Color.white, TextAlignmentOptions.Left, 0.28f);
+            _status = MakeText("status", new Vector3(0f, 0.090f, Depth), 0.17f, Color.white, TextAlignmentOptions.Center, 0.9f);
+            _dice = MakeText("dice", new Vector3(0f, 0.038f, Depth), 0.26f, Color.white, TextAlignmentOptions.Center, 0.9f);
+            _stats = MakeText("stats", new Vector3(0f, -0.02f, Depth), 0.16f, Color.white, TextAlignmentOptions.Center, 0.9f);
         }
 
         void Attach()
@@ -57,8 +57,8 @@ namespace Dejarik.View
             if (p == null) { _stats.text = ""; return; }
             var st = Pieces.Stats[p.Type];
             _stats.color = HoloMaterials.HoloFor(p.Owner);
-            string who = p.Owner == Player.P0 ? "YOU" : "OPPONENT";
-            _stats.text = $"{st.Name}\n<size=72%>({who})  ATK {st.Attack}  DEF {st.Defense}  MOV {st.Movement}</size>";
+            string who = p.Owner == Player.P0 ? "YOU" : "OPP";
+            _stats.text = $"{st.Name} ({who})   ATK {st.Attack}  DEF {st.Defense}  MOV {st.Movement}";
         }
 
         // Re-attach if the camera wasn't ready at Build (rigid parenting otherwise needs no per-frame work).

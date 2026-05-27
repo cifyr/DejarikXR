@@ -18,13 +18,20 @@ namespace XrealAR.EditorTools
         static double _enteredAt = -1.0;
         static double _startedAt;
 
-        public static void Run()
+        static bool _hudMode;
+
+        public static void Run() => Begin(false);
+        public static void RunHud() => Begin(true);   // capture the full game screen incl. the IMGUI HUD
+
+        static void Begin(bool hud)
         {
+            _hudMode = hud;
             _startedAt = EditorApplication.timeSinceStartup;
             EditorSettings.enterPlayModeOptionsEnabled = true;
             EditorSettings.enterPlayModeOptions = EnterPlayModeOptions.DisableDomainReload | EnterPlayModeOptions.DisableSceneReload;
             EditorSceneManager.OpenScene("Assets/Scenes/Main.unity");
-            Dejarik.View.DejarikGame.DebugAutoSelect = true; // preview selection highlights in the capture
+            Dejarik.View.DejarikGame.DebugAutoSelect = true; // preview selection highlights / stats panel
+            Dejarik.View.DejarikGame.DebugSampleDiceHud = hud;
             EditorApplication.update += Tick;
             EditorApplication.EnterPlaymode();
         }
@@ -34,7 +41,17 @@ namespace XrealAR.EditorTools
             double now = EditorApplication.timeSinceStartup;
             if (now - _startedAt > TimeoutSeconds) { Finish(false); return; }
             if (!EditorApplication.isPlaying) return;
-            if (_enteredAt < 0) _enteredAt = now;
+            if (_enteredAt < 0)
+            {
+                _enteredAt = now;
+                if (_hudMode) // a runtime probe screenshots the full screen (GUI included)
+                    new GameObject("HudCaptureProbe").AddComponent<Dejarik.View.HudCaptureProbe>();
+            }
+            if (_hudMode)
+            {
+                if (Dejarik.View.HudCaptureProbe.Done) { Debug.Log("[Capture] HUD probe done"); Finish(true); }
+                return;
+            }
             if (now - _enteredAt < WaitSeconds) return;
             Capture();
             Finish(true);

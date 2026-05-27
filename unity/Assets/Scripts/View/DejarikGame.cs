@@ -78,6 +78,7 @@ namespace Dejarik.View
             Debug.Log($"[Dejarik] {_views.Count} pieces loaded; board pos={_board.Root.position} scale={_board.Root.lossyScale.x:F3}");
 
             _setupDone = true;
+            if (DebugSampleDiceHud) { _diceHud = "Molator  24    vs    9  Ghhhk"; DebugHudReport(1080, 2400); DebugHudReport(2400, 1080); }
             StartCoroutine(RunGame());
         }
 
@@ -106,7 +107,8 @@ namespace Dejarik.View
 
         // ---- human input ----
 
-        public static bool DebugAutoSelect; // editor capture hook: select a piece to preview highlights
+        public static bool DebugAutoSelect;    // editor capture hook: select a piece to preview highlights
+        public static bool DebugSampleDiceHud; // editor capture hook: show a sample dice-total line
 
         IEnumerator HumanTurn()
         {
@@ -355,6 +357,25 @@ namespace Dejarik.View
             _diceHud = null;
         }
 
+        // Verifies the HUD content + that every element fits on-screen at a given resolution (we can't
+        // pixel-capture IMGUI headlessly). Mirrors the rects computed in OnGUI.
+        void DebugHudReport(float w, float h)
+        {
+            float margin = w * 0.04f;
+            float gap = w * 0.025f;
+            float bw = (w - 2 * margin - 2 * gap) / 3f;
+            float bh = h * 0.10f;
+            float by = h - bh - h * 0.06f;
+            float btnRight = margin + 2 * (bw + gap) + bw;
+            var statsBox = new Rect(margin, h * 0.24f, w * 0.46f, h * 0.20f);
+            var sp0 = _statsPieceId != null ? Engine.GetPiece(_state, _statsPieceId) : null;
+            string stats = sp0 != null ? $"{Pieces.Stats[sp0.Type].Name} A{Pieces.Stats[sp0.Type].Attack}/D{Pieces.Stats[sp0.Type].Defense}/M{Pieces.Stats[sp0.Type].Movement}" : "none";
+            bool buttonsFit = btnRight <= w + 0.5f && by + bh <= h;
+            bool statsFit = statsBox.xMax <= w && statsBox.yMax <= h;
+            Debug.Log($"[HUD] {w}x{h}: hud='{_hud}' dice='{_diceHud}' stats=({stats}) " +
+                      $"buttonsRight={btnRight:F0}/{w} fit={buttonsFit} statsBox={statsBox} fit={statsFit}");
+        }
+
         PieceView FindViewAtSpace(int space)
         {
             foreach (var v in _views.Values) if (v != null && v.Space == space) return v;
@@ -388,11 +409,20 @@ namespace Dejarik.View
             _board.Root.rotation = Quaternion.identity;
         }
 
+        static bool _hudLogged;
         void OnGUI()
         {
             if (!_setupDone) return;
             float w = Screen.width, h = Screen.height;
             float margin = w * 0.04f;
+
+            if (!_hudLogged && Event.current.type == EventType.Repaint)
+            {
+                _hudLogged = true;
+                var sp0 = _statsPieceId != null ? Engine.GetPiece(_state, _statsPieceId) : null;
+                Debug.Log($"[HUD] screen={w}x{h} hud='{_hud}' dice='{_diceHud}' stats={(sp0 != null ? Pieces.Stats[sp0.Type].Name : "none")} input='{_inputDbg}'");
+                Debug.Log($"[HUD] statsBox=({margin},{h * 0.24f},{w * 0.46f},{h * 0.20f}) buttonsY={h - h * 0.10f - h * 0.06f} (screen h={h})");
+            }
 
             // Status banner, kept inside the top safe area.
             var style = new GUIStyle(GUI.skin.label)

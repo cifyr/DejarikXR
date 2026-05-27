@@ -16,7 +16,7 @@ namespace Dejarik.View
     public class DejarikGame : MonoBehaviour
     {
         [SerializeField] float tableRadius = 0.34f;    // board play-radius in meters (2/3 of prior)
-        [SerializeField] float reachDistance = 0.68f;  // board distance along your gaze (+3in)
+        [SerializeField] float reachDistance = 1.01f;  // board distance along your gaze (+3in, then +13in)
         [SerializeField] float downBias = 0.2f;        // board drop below gaze (+3in)
         bool _pokePrev;
         const Player Human = Player.P0;

@@ -15,7 +15,7 @@ namespace Dejarik.View
         const float PinchOff = 0.065f;  // hysteresis to release
 
         XRHandSubsystem _subsys;
-        Transform _cam;
+        Transform _trackingSpace;   // XR Origin's CameraFloorOffsetObject — the space hand joints live in
         bool _pinching;
         static readonly List<XRHandSubsystem> s_subsystems = new List<XRHandSubsystem>();
 
@@ -69,12 +69,18 @@ namespace Dejarik.View
             Debug.Log($"[Hand] {Status}");
         }
 
-        // On this device the joint poses come back head-relative (hand reads y~-0.4 while the floor-
-        // referenced camera is at y~1.0), so convert through the camera transform to get world space.
-        Vector3 ToWorld(Vector3 headRelativePos)
+        // Joint poses are in the XR Origin's tracking space (the CameraFloorOffsetObject), which is where
+        // the hand-visual prefabs are parented — so convert through that transform to match exactly where
+        // the rendered hand appears. (Using the moving camera double-applies the head pose; using the XR
+        // Origin root drops the camera Y offset.)
+        Vector3 ToWorld(Vector3 trackingSpacePos)
         {
-            if (_cam == null && Camera.main != null) _cam = Camera.main.transform;
-            return _cam != null ? _cam.TransformPoint(headRelativePos) : headRelativePos;
+            if (_trackingSpace == null)
+            {
+                var o = FindFirstObjectByType<XROrigin>();
+                if (o != null) _trackingSpace = o.CameraFloorOffsetObject != null ? o.CameraFloorOffsetObject.transform : o.transform;
+            }
+            return _trackingSpace != null ? _trackingSpace.TransformPoint(trackingSpacePos) : trackingSpacePos;
         }
     }
 }

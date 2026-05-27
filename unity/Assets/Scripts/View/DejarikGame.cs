@@ -1,8 +1,10 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using Dejarik;
 using XrealAR;
 
@@ -33,7 +35,11 @@ namespace Dejarik.View
         // Centralized per-frame pointer (computed in Update, consumed by the turn coroutines).
         int _ptrSpace = -1;
         bool _ptrConfirm;
-        WorldHud.Button _hoverButton;
+
+        // Phone-screen action buttons (always reachable by tapping the Beam, even if the board drifts).
+        readonly Rect[] _btnRects = new Rect[3];
+        Action[] _btnActions;
+        GUIStyle _btnStyle;
 
         GameState _state;
         Rng _rng;
@@ -60,6 +66,7 @@ namespace Dejarik.View
             _board.Build();
             _world = gameObject.AddComponent<WorldHud>();
             _world.Build(_board.Root, Recenter, PinBoard, () => { _ = NewGame(); });
+            _btnActions = new Action[] { Recenter, PinBoard, () => { _ = NewGame(); } };
             Recenter();
 
             await NewGame();
@@ -94,6 +101,9 @@ namespace Dejarik.View
         IEnumerator RunGame()
         {
             yield return null;
+            // Head tracking isn't ready at Start, so the first placement can be off; re-center once it settles.
+            yield return new WaitForSeconds(1.2f);
+            Recenter();
             while (_state.Phase != Phase.GameOver)
             {
                 switch (_state.Phase)
@@ -218,35 +228,59 @@ namespace Dejarik.View
         {
             if (!_setupDone || _world == null) return;
 
-            // Push HUD content.
             _world.SetStatus(_hud);
             _world.SetDice(_diceHud);
             _world.SetStats(_statsPieceId != null ? Engine.GetPiece(_state, _statsPieceId) : null);
 
-            _ptrSpace = -1; _hoverButton = null; _ptrConfirm = false;
+            ComputeButtonRects();
+            _ptrSpace = -1; _ptrConfirm = false;
             const float maxDist = 0.13f; // fingertip within ~13cm selects (board radius ~0.6 m)
 
-            bool confirm = false;
+            // A tap on the Beam touchscreen: a phone-button press, else a board-confirm.
+            bool tap = false; Vector2 tapGui = default;
+            var ts = Touchscreen.current;
+            if (ts != null)
+                foreach (var t in ts.touches)
+                    if (t.press.wasPressedThisFrame) { tap = true; var p = t.position.ReadValue(); tapGui = new Vector2(p.x, Screen.height - p.y); }
+            if (tap)
+                for (int i = 0; i < 3; i++)
+                    if (_btnRects[i].Contains(tapGui)) { Debug.Log($"[Dejarik] phone button {i}"); _btnActions[i]?.Invoke(); tap = false; break; }
+
+            // Board pointer: pinch-primary; gaze only when no hand is tracked. A leftover phone tap also confirms.
+            bool confirm;
             if (_hand != null && _hand.TryGetTip(out var tip, out bool pinch))
             {
-                confirm = pinch || _input.ConfirmDown;
-                if (_world.NearestButton(tip, maxDist, out var b)) { _hoverButton = b; _input.SetReticle(b.Tr.position); }
-                else if (_board.NearestSpace(tip, maxDist, out var sp)) { _ptrSpace = sp; _input.SetReticle(_board.WorldPos(sp)); }
+                confirm = pinch || tap;
+                if (_board.NearestSpace(tip, maxDist, out var sp)) { _ptrSpace = sp; _input.SetReticle(_board.WorldPos(sp)); }
                 else _input.SetReticle(tip);
             }
-            else // no hand tracked: gaze + Beam tap fallback
+            else
             {
-                confirm = _input.ConfirmDown;
-                if (_world.RaycastButton(_input.CurrentRay, out var b)) { _hoverButton = b; _input.SetReticle(b.Tr.position); }
-                else if (_board.Raycast(_input.CurrentRay, out var sp)) { _ptrSpace = sp; _input.SetReticle(_board.WorldPos(sp)); }
+                confirm = tap;
+                if (_board.Raycast(_input.CurrentRay, out var sp)) { _ptrSpace = sp; _input.SetReticle(_board.WorldPos(sp)); }
                 else _input.SetReticle(null);
             }
+            if (confirm && _ptrSpace >= 0) { _ptrConfirm = true; Debug.Log($"[Dejarik] confirm space={_ptrSpace}"); }
+        }
 
-            if (confirm)
-            {
-                if (_hoverButton != null) { Debug.Log("[Dejarik] button pressed"); _hoverButton.OnClick?.Invoke(); }
-                else if (_ptrSpace >= 0) { _ptrConfirm = true; Debug.Log($"[Dejarik] confirm space={_ptrSpace}"); }
-            }
+        void ComputeButtonRects()
+        {
+            float w = Screen.width, h = Screen.height, margin = w * 0.04f, gap = w * 0.025f;
+            float bw = (w - 2 * margin - 2 * gap) / 3f, bh = h * 0.10f, y = h - bh - h * 0.05f;
+            _btnRects[0] = new Rect(margin, y, bw, bh);
+            _btnRects[1] = new Rect(margin + bw + gap, y, bw, bh);
+            _btnRects[2] = new Rect(margin + 2 * (bw + gap), y, bw, bh);
+        }
+
+        // Draw the action buttons on the phone screen (taps handled in Update via Touchscreen hit-testing).
+        void OnGUI()
+        {
+            if (!_setupDone) return;
+            _btnStyle ??= new GUIStyle(GUI.skin.button) { fontSize = Mathf.RoundToInt(Screen.height * 0.022f), wordWrap = true };
+            ComputeButtonRects();
+            GUI.Button(_btnRects[0], "RECENTER", _btnStyle);
+            GUI.Button(_btnRects[1], "PIN BOARD", _btnStyle);
+            GUI.Button(_btnRects[2], "NEW GAME", _btnStyle);
         }
 
         void PinBoard() { if (_anchors != null) _ = _anchors.PinAsync(_board.Root, "dejarik-board"); }

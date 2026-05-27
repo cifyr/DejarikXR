@@ -25,14 +25,11 @@ namespace Dejarik.View
             _root = boardRoot;
             _cam = Camera.main;
 
+            // Info HUD floats by the board (visible while looking at it). Action buttons live on the phone
+            // touchscreen (see DejarikGame.OnGUI) so they're always reachable even if the board drifts.
             _status = MakeText("status", new Vector3(0f, 5.6f, 0f), 5.5f, Color.white, TextAlignmentOptions.Center, 18f);
             _dice = MakeText("dice", new Vector3(0f, 4.3f, 0f), 6.5f, Color.white, TextAlignmentOptions.Center, 18f);
             _stats = MakeText("stats", new Vector3(-6.2f, 2.2f, -1f), 4.5f, Color.white, TextAlignmentOptions.Left, 7f);
-
-            // Action buttons floating just outside the near (camera-side) rim, at hand-reach height.
-            MakeButton("RECENTER", new Vector3(-3.4f, 1.1f, -5.9f), HoloMaterials.P0, recenter);
-            MakeButton("PIN", new Vector3(0f, 1.1f, -6.2f), HoloMaterials.Hex("#c08cff"), pin);
-            MakeButton("NEW GAME", new Vector3(3.4f, 1.1f, -5.9f), HoloMaterials.P1, newGame);
         }
 
         TMP_Text MakeText(string name, Vector3 localPos, float size, Color color, TextAlignmentOptions align, float width)

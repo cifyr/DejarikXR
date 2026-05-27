@@ -23,6 +23,7 @@ namespace Dejarik.View
 
         CreatureInstance _c;
         Transform _inner;
+        Renderer[] _renderers;
         readonly Queue<Vector3> _path = new Queue<Vector3>();
         Vector3? _segTarget;
         float _desiredYaw;
@@ -42,43 +43,25 @@ namespace Dejarik.View
             _desiredYaw = YawToCenter(p.Space);
             transform.localRotation = Quaternion.Euler(0f, _desiredYaw, 0f);
             PlayLoop(_c.Idle, 0.35f);
-            StartCoroutine(Ground());
+            _renderers = _c.Holder.GetComponentsInChildren<Renderer>();
         }
 
-        // CreatureFactory grounds the bind pose, but the idle animation shifts the feet, so a single frame is
-        // unreliable: a swung limb/staff reads as the lowest point and shoves the whole creature off the board.
-        // Sample the bounds' min.y over ~1s and ground to the 25th percentile — the height the feet sit at
-        // when planted, ignoring transient deep dips (a low-reaching limb) and transient lifts (a bob).
-        IEnumerator Ground()
+        // Continuously pin the creature's lowest point to the cell plane so nothing floats: after the pose is
+        // sampled each frame, if the lowest vertex would sit above the board, drop the model so it touches.
+        // Downward-only (never lifts) so a limb reaching below the feet can't shove the whole body up.
+        void LateUpdate()
         {
-            if (_c == null) yield break;
-            var rs = _c.Holder.GetComponentsInChildren<Renderer>();
-            if (rs.Length == 0) yield break;
-            float planeY = transform.position.y;   // where the feet should rest (PieceView origin = cell top)
-            var samples = new List<float>(64);
-            float t0 = Time.time;
-            while (Time.time - t0 < 1.0f)
-            {
-                var b = rs[0].bounds;
-                for (int i = 1; i < rs.Length; i++) b.Encapsulate(rs[i].bounds);
-                samples.Add(b.min.y);
-                yield return null;
-            }
-            if (samples.Count == 0) yield break;
-            samples.Sort();
-            float planted = samples[Mathf.Clamp(samples.Count / 4, 0, samples.Count - 1)]; // 25th percentile
+            if (_c == null || _renderers == null || _renderers.Length == 0 || _inner == null) return;
             float scaleY = _inner.lossyScale.y;
-            if (Mathf.Abs(scaleY) < 1e-5f) yield break;
-            var lp = _c.Holder.transform.localPosition;
-            float endY = lp.y + (planeY - planted) / scaleY;
-            float lt = 0f;
-            while (lt < 0.25f) // ease to avoid a pop
+            if (Mathf.Abs(scaleY) < 1e-5f) return;
+            var b = _renderers[0].bounds;
+            for (int i = 1; i < _renderers.Length; i++) b.Encapsulate(_renderers[i].bounds);
+            float over = b.min.y - transform.position.y;   // >0 means floating above the cell plane
+            if (over > 0.0005f)
             {
-                lt += Time.deltaTime;
-                lp = _c.Holder.transform.localPosition;
-                lp.y = Mathf.Lerp(lp.y, endY, lt / 0.25f);
+                var lp = _c.Holder.transform.localPosition;
+                lp.y -= over / scaleY;
                 _c.Holder.transform.localPosition = lp;
-                yield return null;
             }
         }
 

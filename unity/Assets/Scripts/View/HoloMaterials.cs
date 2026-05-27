@@ -17,6 +17,11 @@ namespace Dejarik.View
         public static Color HoloFor(Player owner) => owner == Player.P0 ? P0 : P1;
         public static string HexStr(Player owner) => owner == Player.P0 ? "#38e1ff" : "#ff8a3c"; // for rich-text tags
 
+        // Dice are color-coded blue (you, P0) vs red (opponent, P1) for at-a-glance contrast during a roll.
+        public static readonly Color DiceBlue = Hex("#38e1ff"), DiceRed = Hex("#ff4040");
+        public static Color DiceColor(Player p) => p == Player.P0 ? DiceBlue : DiceRed;
+        public static string DiceHex(Player p) => p == Player.P0 ? "#38e1ff" : "#ff4040";
+
         // Tinted emissive hologram for a creature mesh. Keeps the source diffuse/normal maps, tints albedo
         // toward white, and uses the diffuse as the emission map glowing in the player's holo color.
         public static Material Creature(Texture mainTex, Texture normalMap, Player owner)

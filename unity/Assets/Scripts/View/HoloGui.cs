@@ -44,6 +44,56 @@ namespace Dejarik.View
 
         public static Texture2D BgTex { get { EnsureBuilt(); return _bgTex; } }
 
+        static Texture2D _miniTex, _dotTex;
+        public static Texture2D MinimapTex { get { if (_miniTex == null) _miniTex = BuildMinimap(); return _miniTex; } }
+        public static Texture2D DotTex { get { if (_dotTex == null) _dotTex = BuildDot(); return _dotTex; } }
+
+        // Top-down Dejarik board diagram: two concentric rings split into 12 sectors around a center circle.
+        // Radii are BoardLayout's, normalized to the rim. Cyan lines on a faint fill, transparent outside.
+        static Texture2D BuildMinimap()
+        {
+            const int s = 256;
+            var t = new Texture2D(s, s, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            float[] rings = { 0.175f, 0.206f, 0.515f, 0.536f, 0.918f, 1.0f }; // RCenter, Inner[], Outer[], Rim / Rim
+            Color line = new Color(Cyan.r, Cyan.g, Cyan.b, 0.9f);
+            Color faint = new Color(Cyan.r, Cyan.g, Cyan.b, 0.10f);
+            var px = new Color[s * s];
+            float c = (s - 1) / 2f, R = s / 2f - 2f, lw = 1.6f;
+            for (int y = 0; y < s; y++)
+                for (int x = 0; x < s; x++)
+                {
+                    float dx = x - c, dy = y - c, d = Mathf.Sqrt(dx * dx + dy * dy) / R;
+                    Color col = new Color(0, 0, 0, 0);
+                    if (d <= 1.0f) col = faint;
+                    foreach (var rr in rings) if (Mathf.Abs(d - rr) * R < lw) { col = line; break; }
+                    if (d >= rings[1] - 0.01f && d <= 1.0f) // spokes only across the ringed band
+                    {
+                        float ang = Mathf.Atan2(dy, dx) * Mathf.Rad2Deg, m = Mathf.Repeat(ang, 30f);
+                        float half = lw / Mathf.Max(1f, d * R) * Mathf.Rad2Deg;
+                        if (m < half || m > 30f - half) col = line;
+                    }
+                    px[y * s + x] = col;
+                }
+            t.SetPixels(px); t.Apply();
+            return t;
+        }
+
+        static Texture2D BuildDot()
+        {
+            const int s = 32;
+            var t = new Texture2D(s, s, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            float c = (s - 1) / 2f, r = s / 2f - 1f;
+            var px = new Color[s * s];
+            for (int y = 0; y < s; y++)
+                for (int x = 0; x < s; x++)
+                {
+                    float d = Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c));
+                    px[y * s + x] = new Color(1, 1, 1, Mathf.Clamp01(r - d));
+                }
+            t.SetPixels(px); t.Apply();
+            return t;
+        }
+
         // 9-slice texture: 2px glowing border over a translucent fill.
         static Texture2D Bordered(Color fill, Color border)
         {

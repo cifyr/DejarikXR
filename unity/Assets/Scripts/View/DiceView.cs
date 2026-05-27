@@ -115,7 +115,7 @@ namespace Dejarik.View
                     var mr = go.GetComponent<MeshRenderer>();
                     var m = new Material(Shader.Find("Dejarik/Hologram"));
                     m.SetTexture("_MainTex", _atlas);
-                    m.SetColor("_HoloColor", Color.Lerp(col, Color.white, 0.3f));
+                    m.SetColor("_HoloColor", Color.Lerp(col, Color.white, 0.15f)); // keep the team color vivid
                     m.SetFloat("_RimPower", 1.8f);
                     m.SetFloat("_Glow", 1.1f);
                     m.SetFloat("_Alpha", 0.97f);
@@ -129,8 +129,8 @@ namespace Dejarik.View
                     _spawned.Add(go);
                 }
             }
-            Spawn(atkCount, HoloMaterials.HoloFor(attacker));
-            Spawn(defCount, HoloMaterials.HoloFor(attacker.Other()));
+            Spawn(atkCount, HoloMaterials.DiceColor(attacker));
+            Spawn(defCount, HoloMaterials.DiceColor(attacker.Other()));
 
             yield return new WaitForSeconds(2.3f);      // tumble + settle
             yield return new WaitForSeconds(0.95f);      // hold settled

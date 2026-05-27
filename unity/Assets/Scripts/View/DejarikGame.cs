@@ -39,7 +39,7 @@ namespace Dejarik.View
         // Action buttons on the phone touchscreen (always reachable on the physical Beam).
         readonly Rect[] _btnRects = new Rect[3];
         Action[] _btnActions;
-        GUIStyle _btnStyle, _titleStyle, _statusStyle, _diceStyle, _turnStyle, _panelStyle, _subStyle;
+        GUIStyle _btnStyle, _titleStyle, _statusStyle, _diceStyle, _turnStyle, _panelStyle, _subStyle, _miniDotStyle;
 
         bool _celebrating;
 
@@ -350,11 +350,40 @@ namespace Dejarik.View
             y += rowH;
             if (!string.IsNullOrEmpty(_diceHud))
                 GUI.Label(new Rect(sr.x + sr.width * 0.06f, y, sr.width * 0.88f, rowH), _diceHud, _diceStyle);
+            y += rowH * 0.9f;
 
+            // 2D minimap filling the gap between the readouts and the buttons, so a spectator on the phone
+            // can read the live board state.
             ComputeButtonRects();
+            float miniTop = y, miniBottom = _btnRects[0].y - sr.height * 0.03f;
+            float side = Mathf.Min(sr.width * 0.62f, miniBottom - miniTop);
+            if (side > 40f)
+                DrawMinimap(new Rect(sr.center.x - side / 2f, (miniTop + miniBottom) / 2f - side / 2f, side, side));
+
             GUI.Button(_btnRects[0], "RECENTER", _btnStyle);
             GUI.Button(_btnRects[1], _moveHeldPrev ? "MOVING…\ntilt phone" : "MOVE\nhold + tilt", _btnStyle);
             GUI.Button(_btnRects[2], "NEW GAME", _btnStyle);
+        }
+
+        // Top-down board with a colored dot per piece (cyan = you, amber = opponent) at its cell, plus the
+        // creature's initial. Mirrors the live state for someone watching the phone.
+        void DrawMinimap(Rect sq)
+        {
+            GUI.DrawTexture(sq, HoloGui.MinimapTex, ScaleMode.ScaleToFit);
+            if (_state == null) return;
+            _miniDotStyle ??= HoloGui.Label(Mathf.RoundToInt(sq.height * 0.05f), Color.black, TextAnchor.MiddleCenter, FontStyle.Bold);
+            float side = sq.height, dot = side * 0.085f;
+            foreach (var p in _state.Pieces)
+            {
+                var pos = BoardLayout.Pos3D(p.Space);
+                float px = sq.center.x + pos.x / BoardLayout.Rim * (side / 2f) * 0.92f;
+                float py = sq.center.y + pos.z / BoardLayout.Rim * (side / 2f) * 0.92f;
+                var r = new Rect(px - dot / 2f, py - dot / 2f, dot, dot);
+                GUI.color = HoloMaterials.HoloFor(p.Owner);
+                GUI.DrawTexture(r, HoloGui.DotTex);
+                GUI.color = Color.white;
+                GUI.Label(r, Pieces.Stats[p.Type].Name.Substring(0, 1), _miniDotStyle);
+            }
         }
 
         // Hold-to-move: deflect the phone from where it pointed when you grabbed MOVE; that deflection drives
@@ -512,7 +541,7 @@ namespace Dejarik.View
 
             int atkTotal = combat.AttackDice.Sum(), defTotal = combat.DefenseDice.Sum();
             // Color each side's name+total like its dice (cyan = you/P0, amber = opponent) so it's clear which is which.
-            string ac = HoloMaterials.HexStr(combat.AttackerOwner.Value), dc = HoloMaterials.HexStr(combat.AttackerOwner.Value.Other());
+            string ac = HoloMaterials.DiceHex(combat.AttackerOwner.Value), dc = HoloMaterials.DiceHex(combat.AttackerOwner.Value.Other());
             _diceHud = $"<color={ac}>{Pieces.Stats[combat.AttackerType.Value].Name} {atkTotal}</color>    vs    <color={dc}>{defTotal} {Pieces.Stats[combat.DefenderType.Value].Name}</color>";
             Vector3 center = _board.WorldPos(Board.Center);
             _dice.ShowRoll(atkTotal, defTotal, combat.AttackDice.Length, combat.DefenseDice.Length, combat.AttackerOwner.Value, center);

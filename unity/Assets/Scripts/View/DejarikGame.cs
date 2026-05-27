@@ -246,22 +246,13 @@ namespace Dejarik.View
                 for (int i = 0; i < 3; i++)
                     if (_btnRects[i].Contains(tapGui)) { Debug.Log($"[Dejarik] phone button {i}"); _btnActions[i]?.Invoke(); tap = false; break; }
 
-            // Direct pinch: select the cell/piece nearest your fingertip in 3D, and pinch to confirm.
-            // (Gaze + tap fallback only when no hand is tracked.)
+            // Board interaction is pinch-only: select the cell/piece nearest your fingertip and pinch to
+            // confirm. No gaze/look-to-select. (The phone tap above is only for the on-screen buttons.)
             bool pinch = false; Vector3 tip = default;
             bool handTracked = _hand != null && _hand.TryGetTip(out tip, out pinch);
-            bool confirm = pinch || tap;
-            if (handTracked)
-            {
-                if (_board.NearestSpace(tip, maxDist, out var sp)) { _ptrSpace = sp; _input.SetReticle(_board.WorldPos(sp)); }
-                else _input.SetReticle(null);
-            }
-            else
-            {
-                if (_board.Raycast(_input.CurrentRay, out var sp)) { _ptrSpace = sp; _input.SetReticle(_board.WorldPos(sp)); }
-                else _input.SetReticle(null);
-            }
-            if (confirm && _ptrSpace >= 0) { _ptrConfirm = true; Debug.Log($"[Dejarik] confirm space={_ptrSpace} tip={tip:F2}"); }
+            if (handTracked && _board.NearestSpace(tip, maxDist, out var sp)) { _ptrSpace = sp; _input.SetReticle(_board.WorldPos(sp)); }
+            else _input.SetReticle(null);
+            if (pinch && _ptrSpace >= 0) { _ptrConfirm = true; Debug.Log($"[Dejarik] confirm space={_ptrSpace} tip={tip:F2}"); }
 
             _board.SetRimColor(HoloMaterials.HoloFor(_state.Turn)); // rim shows whose turn it is
         }

@@ -1,11 +1,12 @@
 using System;
 using System.Linq;
-using System.Reflection;
 using UnityEditor;
 using UnityEditor.XR.Management;
 using UnityEditor.XR.Management.Metadata;
+using UnityEditor.XR.OpenXR.Features;
 using UnityEngine;
 using UnityEngine.XR.Management;
+using UnityEngine.XR.OpenXR;
 
 namespace XrealAR.EditorTools
 {
@@ -23,16 +24,24 @@ namespace XrealAR.EditorTools
         const string XrealLoaderType = "Unity.XR.XREAL.XREALXRLoader";
         const string XrSettingsAsset = "Assets/XR/XRGeneralSettings.asset";
 
-        // VERIFY: these feature IDs are the conventional Google / Unity Android XR OpenXR feature IDs as
-        // of androidxr-openxr 1.2. They may need adjustment if the package version moves. The build still
-        // works without these — the user enables them in Project Settings -> XR Plug-in Management ->
-        // OpenXR -> Android tab. We try here so a CI build can be one command.
+        // Feature IDs verified against the imported package source (PackageCache):
+        //   AndroidXR-openxr 1.2 — Runtime/Features/AndroidXRSupportFeature.cs / Subsystems/*/Feature.cs
+        //   OpenXR 1.16 — Runtime/CompositionLayers/OpenXRCompositionLayersFeature.cs,
+        //                 Runtime/Features/Interactions/HandInteractionProfile.cs
+        //   XR Hands 1.7 — Runtime/OpenXR/HandTracking.cs
+        // The OpenXR build validator blocks the build unless (a) at least one interaction profile is
+        // enabled (Hand Interaction Profile satisfies this for hand-driven Android XR) and
+        // (b) Composition Layers Support is enabled if the Composition Layers package is in the project
+        // (it gets pulled in transitively by androidxr-openxr 1.2). The Android XR Session + Anchor and
+        // the Hand Tracking subsystem are the runtime features the game actually uses.
         static readonly string[] AndroidXrFeatureIds =
         {
-            "com.google.xr.session",         // VERIFY
-            "com.google.xr.handtracking",    // VERIFY
-            "com.google.xr.anchors",         // VERIFY
-            "com.google.xr.planedetection",  // VERIFY (used if room mesh becomes desirable later)
+            "com.unity.openxr.feature.androidxr-support",                 // Android XR parent feature
+            "com.unity.openxr.feature.arfoundation-androidxr-session",    // AR Session (XR Origin lifecycle)
+            "com.unity.openxr.feature.arfoundation-androidxr-anchor",     // AR Anchor (PIN-to-room)
+            "com.unity.openxr.feature.input.handtracking",                // Hand Tracking Subsystem (XR Hands)
+            "com.unity.openxr.feature.input.handinteraction",             // Hand Interaction Profile (validator)
+            "com.unity.openxr.feature.compositionlayers",                 // Composition Layers Support (validator)
         };
 
         // Swaps XREAL loader off for Android, swaps OpenXR loader on. Idempotent. Safe to run repeatedly.
@@ -69,49 +78,44 @@ namespace XrealAR.EditorTools
             AssetDatabase.SaveAssets();
         }
 
-        // Reflection-based feature enablement: each ID is looked up in OpenXRSettings.ActiveBuildTargetInstance
-        // and enabled. If the API surface differs (renamed method, missing ID), we log and continue so the
-        // build doesn't abort — the user can enable the feature manually in Project Settings.
+        // Direct calls to the OpenXR Editor API (FeatureHelpers) to locate the feature ScriptableObjects,
+        // then SerializedObject to set the m_enabled backing field directly. We bypass the public
+        // `feature.enabled` setter on purpose because in androidxr-openxr 1.2 the setter fires
+        // AndroidXROpenXRFeature.OnEnabledChange -> OpenXRLifeCycleFeature.RefreshEnabledState, which
+        // NPEs in batchmode (the Hidden lifecycle feature isn't yet in OpenXRSettings.features and its
+        // delayCall hasn't fired). SerializedObject writes the backing field directly, so OnEnabledChange
+        // never runs and the validator still sees feature.enabled==true via the getter on the next read.
         public static void EnableAndroidXrOpenXrFeatures()
         {
-            var openXrSettingsType = Type.GetType("UnityEngine.XR.OpenXR.OpenXRSettings, Unity.XR.OpenXR");
-            if (openXrSettingsType == null)
-            {
-                Debug.LogWarning("[AndroidXrSetup] OpenXRSettings type not found; package not imported yet? Skipping feature toggles (set them in Project Settings -> XR -> OpenXR -> Android).");
-                return;
-            }
+            FeatureHelpers.RefreshFeatures(BuildTargetGroup.Android);
 
-            // OpenXRSettings.ActiveBuildTargetInstance returns the settings asset for the active build target.
-            var activeProp = openXrSettingsType.GetProperty("ActiveBuildTargetInstance", BindingFlags.Public | BindingFlags.Static);
-            var activeSettings = activeProp?.GetValue(null);
-            if (activeSettings == null)
-            {
-                Debug.LogWarning("[AndroidXrSetup] OpenXRSettings.ActiveBuildTargetInstance returned null; ensure active build target is Android, then re-run. Skipping feature toggles.");
-                return;
-            }
-
-            // OpenXRSettings.GetFeature(string id) or GetFeature(Type t) by reflection. Then OpenXRFeature.enabled = true.
-            var getFeatureById = openXrSettingsType.GetMethod("GetFeature", new[] { typeof(string) });
-            if (getFeatureById == null)
-            {
-                Debug.LogWarning("[AndroidXrSetup] OpenXRSettings.GetFeature(string) not found in this package version; enable features in Project Settings.");
-                return;
-            }
-
-            int enabled = 0, missing = 0;
+            int enabled = 0, missing = 0, skipped = 0;
             foreach (var id in AndroidXrFeatureIds)
             {
-                var feature = getFeatureById.Invoke(activeSettings, new object[] { id });
-                if (feature == null) { missing++; Debug.LogWarning($"[AndroidXrSetup] OpenXR feature id not found: {id}  (VERIFY name; enable manually in Project Settings if needed)"); continue; }
-                var enabledProp = feature.GetType().GetProperty("enabled");
-                if (enabledProp == null) { missing++; Debug.LogWarning($"[AndroidXrSetup] feature {id} has no 'enabled' property in this version"); continue; }
-                enabledProp.SetValue(feature, true);
-                EditorUtility.SetDirty((UnityEngine.Object)feature);
+                var feature = FeatureHelpers.GetFeatureWithIdForBuildTarget(BuildTargetGroup.Android, id);
+                if (feature == null)
+                {
+                    missing++;
+                    Debug.LogWarning($"[AndroidXrSetup] OpenXR feature not found for id={id}; the providing package may not be imported. Tick it in Project Settings -> XR -> OpenXR -> Android if needed.");
+                    continue;
+                }
+
+                var so = new SerializedObject(feature);
+                var prop = so.FindProperty("m_enabled");
+                if (prop == null)
+                {
+                    skipped++;
+                    Debug.LogWarning($"[AndroidXrSetup] feature {id} has no m_enabled serialized field (unexpected schema)");
+                    continue;
+                }
+                prop.boolValue = true;
+                so.ApplyModifiedPropertiesWithoutUndo();
+                EditorUtility.SetDirty(feature);
                 enabled++;
-                Debug.Log($"[AndroidXrSetup] enabled OpenXR feature {id}");
+                Debug.Log($"[AndroidXrSetup] enabled OpenXR feature {id}  ({feature.GetType().Name})");
             }
             AssetDatabase.SaveAssets();
-            Debug.Log($"[AndroidXrSetup] feature toggle: enabled={enabled} missing={missing} (manual GUI fallback for any missing).");
+            Debug.Log($"[AndroidXrSetup] feature toggle complete: enabled={enabled} missing={missing} skipped={skipped}");
         }
 
         // One-call setup wired into the build script: loader + features in one go.
@@ -119,7 +123,7 @@ namespace XrealAR.EditorTools
         {
             EnableOpenXrLoaderAndroid();
             EnableAndroidXrOpenXrFeatures();
-            Debug.Log("[AndroidXrSetup] baseline Android XR setup complete (VERIFY: open Project Settings -> XR Plug-in Management -> OpenXR -> Android tab and confirm Session, Hand Tracking, Anchors are ticked).");
+            Debug.Log("[AndroidXrSetup] baseline Android XR setup complete (loader + features enabled headlessly).");
         }
     }
 }

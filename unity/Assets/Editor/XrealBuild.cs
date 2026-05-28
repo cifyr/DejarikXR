@@ -134,6 +134,15 @@ namespace XrealAR.EditorTools
                 Debug.Log($"[XrealBuild] added scripting define {GalaxyXrDefine}");
             }
 
+            // Android XR is Vulkan-native, and the OpenXR validator rejects "OpenGLES + Gamma color space"
+            // outright and disables Optimize Buffer Discards off Vulkan. The XREAL build uses GLES3 +
+            // Gamma because that's what the XREAL composition layer needs; for Galaxy XR we flip to
+            // Vulkan + Linear. RestoreXrealBuildConfig flips both back.
+            PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[] { GraphicsDeviceType.Vulkan });
+            PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.Android, false);
+            PlayerSettings.colorSpace = ColorSpace.Linear;
+            Debug.Log("[XrealBuild] Galaxy XR rendering: Vulkan + Linear color space");
+
             AndroidXrSetup.BaselineSetup();
 
             var enabled = Array.FindAll(EditorBuildSettings.scenes, s => s.enabled);
@@ -224,8 +233,13 @@ namespace XrealAR.EditorTools
                 "UnityEngine.XR.OpenXR.OpenXRLoader",
                 BuildTargetGroup.Android);
 
+            // Rendering: back to the XREAL configuration (OpenGL ES3 + Gamma).
+            PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[] { GraphicsDeviceType.OpenGLES3 });
+            PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.Android, false);
+            PlayerSettings.colorSpace = ColorSpace.Gamma;
+
             AssetDatabase.SaveAssets();
-            Debug.Log($"[XrealBuild] restored XREAL build config (id={PackageId}, removed {GalaxyXrDefine}, re-assigned XREAL loader, removed OpenXR loader)");
+            Debug.Log($"[XrealBuild] restored XREAL build config (id={PackageId}, removed {GalaxyXrDefine}, re-assigned XREAL loader, removed OpenXR loader, rendering: GLES3 + Gamma)");
         }
 
         // Resolve the XRManagerSettings instance for a given build target group via the XR Management

@@ -1,7 +1,9 @@
 #if UNITY_ANDROID
 using System.IO;
 using System.Xml;
+using UnityEditor;
 using UnityEditor.Android;
+using UnityEditor.Build;
 using UnityEngine;
 
 namespace XrealAR.EditorTools
@@ -14,10 +16,20 @@ namespace XrealAR.EditorTools
     public class XrealManifestPatch : IPostGenerateGradleAndroidProject
     {
         const string AndroidNs = "http://schemas.android.com/apk/res/android";
+        const string GalaxyXrGate = "DEJARIK_ANDROID_XR";
         public int callbackOrder => 100;
 
         public void OnPostGenerateGradleAndroidProject(string projectPath)
         {
+            // Gate: a single source produces two APKs (XREAL + Galaxy XR). Skip XREAL meta-data injection
+            // when the Galaxy XR scripting define is active so the AndroidXrManifestPatch owns the build.
+            var defines = PlayerSettings.GetScriptingDefineSymbols(NamedBuildTarget.Android) ?? "";
+            if (defines.Contains(GalaxyXrGate))
+            {
+                Debug.Log($"[XrealManifestPatch] skipped ({GalaxyXrGate} define active — Galaxy XR build).");
+                return;
+            }
+
             string manifestPath = Path.Combine(projectPath, "src", "main", "AndroidManifest.xml");
             if (!File.Exists(manifestPath))
             {

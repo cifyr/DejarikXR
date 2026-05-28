@@ -31,24 +31,35 @@ namespace Dejarik.View
         GazeSelector _input;
         HandSelector _hand;
         WorldHud _world;
+#if DEJARIK_ANDROID_XR
+        // Galaxy XR has no companion phone, so the phone control deck (HoloGui + OnGUI) is replaced by
+        // a wrist-attached worldspace deck driven by hand tracking. See WorldDeck.cs.
+        WorldDeck _deck;
+#endif
 
         // Centralized per-frame pointer (computed in Update, consumed by the turn coroutines).
         int _ptrSpace = -1;
         bool _ptrConfirm;
 
-        // Action buttons on the phone touchscreen (always reachable on the physical Beam).
+#if !DEJARIK_ANDROID_XR
+        // Action buttons on the phone touchscreen (always reachable on the physical Beam). On Galaxy XR
+        // these are replaced by the wrist deck's RECENTER / NEW GAME buttons.
         readonly Rect[] _btnRects = new Rect[3];
         Action[] _btnActions;
         GUIStyle _btnStyle, _titleStyle, _statusStyle, _diceStyle, _turnStyle, _panelStyle, _subStyle, _miniDotStyle;
+#endif
 
         bool _celebrating;
 
+#if !DEJARIK_ANDROID_XR
         // Hold-to-move: while the MOVE button is held, tilt the phone like a wand to push the board in x/y/z
         // (mirrors XrealARApp's SceneManipulator). Sweep top right/left, tilt up/down, roll for closer/farther.
+        // On Galaxy XR this gesture is replaced by right-hand pinch-and-drag on the board (WorldDeck).
         const float MoveSpeed = 0.4f;   // m/s at full deflection (slower than the room-scale original)
         const float MoveDeadzone = 0.08f;
         bool _moveHeldPrev;
         Quaternion _moveRef;
+#endif
 
 
         GameState _state;
@@ -75,8 +86,15 @@ namespace Dejarik.View
             _board.Build();
             _world = gameObject.AddComponent<WorldHud>();
             _world.Build(_board.Root);
+#if DEJARIK_ANDROID_XR
+            _deck = gameObject.AddComponent<WorldDeck>();
+            _deck.AttachToBoard(_board.Root, tableRadius);
+            _deck.OnRecenter += Recenter;
+            _deck.OnNewGame += () => { _ = NewGame(); };
+#else
             _btnActions = new Action[] { Recenter, null, () => { _ = NewGame(); } }; // [1] MOVE is a hold, not a tap
             if (AttitudeSensor.current != null) InputSystem.EnableDevice(AttitudeSensor.current);
+#endif
             _audio.StartAmbient(_board.Root); // hologram-projector hum from the board
             Recenter();
 
@@ -246,11 +264,12 @@ namespace Dejarik.View
             _world.SetDice(_diceHud);
             _world.SetStats(_statsPieceId != null ? Engine.GetPiece(_state, _statsPieceId) : null);
 
-            ComputeButtonRects();
             _ptrSpace = -1; _ptrConfirm = false;
             const float hoverRadius = 0.25f; // nearest cell within this is "hovered" (white square shown)
             const float pokeDist = 0.085f;   // push your fingertip this close to the hovered cell to select
 
+#if !DEJARIK_ANDROID_XR
+            ComputeButtonRects();
             // Phone buttons: RECENTER/NEW GAME are taps; MOVE (index 1) is a hold (handled below).
             bool moveHeld = false;
             var ts = Touchscreen.current;
@@ -266,6 +285,7 @@ namespace Dejarik.View
                             if (i != 1 && _btnRects[i].Contains(gui)) { Debug.Log($"[Dejarik] phone button {i}"); _btnActions[i]?.Invoke(); break; }
                 }
             MoveBoard(moveHeld);
+#endif
 
             // Board interaction: the cell nearest your fingertip is "hovered" and marked with a white square
             // so you can see (and correct) the target despite hand-tracking offset. Push your finger into it
@@ -290,6 +310,7 @@ namespace Dejarik.View
             _board.SetRimColor(HoloMaterials.HoloFor(_state.Turn)); // rim shows whose turn it is
         }
 
+#if !DEJARIK_ANDROID_XR
         // GUI-space rect that avoids the device safe area + the Beam's bottom navigation bar (its buttons get
         // hidden behind the nav bar otherwise). Origin top-left to match IMGUI.
         Rect SafeRectGui()
@@ -416,6 +437,7 @@ namespace Dejarik.View
 
         float Dz(float v) => Mathf.Abs(v) < MoveDeadzone ? 0f : v;
         static Vector3 Flat(Vector3 v) { v = Vector3.ProjectOnPlane(v, Vector3.up); return v.sqrMagnitude < 1e-4f ? Vector3.forward : v.normalized; }
+#endif
 
         // ---- bot ----
 
